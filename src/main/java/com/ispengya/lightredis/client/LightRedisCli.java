@@ -1,18 +1,16 @@
 package com.ispengya.lightredis.client;
 
-import com.ispengya.remoting.netty.NettyRemotingClient;
-import com.ispengya.remoting.protocol.RemotingCommand;
 import picocli.CommandLine;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 
 @CommandLine.Command(name = "light-redis-cli", mixinStandardHelpOptions = true, version = "0.0.1")
 public class LightRedisCli implements Runnable {
-
-    private static final int REQUEST_CODE = 1;
 
     @CommandLine.Option(names = {"-h", "--host"}, description = "Server host", defaultValue = "127.0.0.1")
     private String host;
@@ -31,14 +29,17 @@ public class LightRedisCli implements Runnable {
     @Override
     public void run() {
         String address = host + ":" + port;
-        NettyRemotingClient client = new NettyRemotingClient();
+        RemotingLightRedisClient client = new RemotingLightRedisClient(host, port, timeoutMillis);
+        PrintWriter out = new PrintWriter(new OutputStreamWriter(System.out, StandardCharsets.UTF_8), true);
         try {
             client.start();
-            Runtime.getRuntime().addShutdownHook(new Thread(client::shutdown));
-            BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-            System.out.println("Connected to " + address + ", type \"quit\" or \"exit\" to close.");
+            Runtime.getRuntime().addShutdownHook(new Thread(client::close));
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(System.in, StandardCharsets.UTF_8));
+            out.println("Connected to " + address + ", type \"quit\" or \"exit\" to close.");
             while (true) {
-                System.out.print(host + ":" + port + "> ");
+                out.print(host + ":" + port + "> ");
+                out.flush();
                 String line = reader.readLine();
                 if (line == null) {
                     break;
@@ -51,23 +52,21 @@ public class LightRedisCli implements Runnable {
                     break;
                 }
                 try {
-                    RemotingCommand request = RemotingCommand.createRequestCommand(REQUEST_CODE, null);
-                    request.setBody(trimmed.getBytes(StandardCharsets.UTF_8));
-                    RemotingCommand response = client.invokeSync(address, request, timeoutMillis);
-                    byte[] body = response.getBody();
-                    if (body != null && body.length > 0) {
-                        System.out.println(new String(body, StandardCharsets.UTF_8));
+                    String reply = client.execute(trimmed);
+                    if (!reply.isEmpty()) {
+                        out.println(reply);
                     } else {
-                        System.out.println("(empty)");
+                        out.println("(empty)");
                     }
                 } catch (Exception e) {
-                    e.printStackTrace(System.out);
+                    e.printStackTrace(out);
                 }
             }
         } catch (IOException e) {
-            e.printStackTrace(System.out);
+            e.printStackTrace(out);
         } finally {
-            client.shutdown();
+            out.flush();
+            client.close();
         }
     }
 }

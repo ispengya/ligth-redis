@@ -1,5 +1,6 @@
 package com.ispengya.lightredis.store;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -47,5 +48,23 @@ public class InMemoryKeyValueStore implements KeyValueStore {
             return false;
         }
         return data.containsKey(key);
+    }
+
+    @Override
+    public List<String> keys() {
+        return new ArrayList<>(data.keySet());
+    }
+
+    @Override
+    public long size() {
+        return data.size();
+    }
+
+    @Override
+    public String type(String key) {
+        if (key == null) {
+            return "none";
+        }
+        return data.containsKey(key) ? "string" : "none";
     }
 }

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>light-redis · 控制台</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="/style.css">
+    <script src="/app.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <div class="logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 7l5 5-5 5"/>
+                <path d="M12.5 17H19"/>
+            </svg>
+        </div>
+        <div class="brand-text">
+            <div class="brand-line">
+                <h1>light-redis<span class="brand-dot">.</span></h1>
+            </div>
+            <p id="redis-address" class="subtitle mono">127.0.0.1:6379</p>
+        </div>
+    </div>
+    <div class="topbar-actions">
+        <label class="refresh-control">
+            <span class="control-label">自动刷新</span>
+            <span class="select-wrap">
+                <select id="refresh-interval" aria-label="状态刷新间隔">
+                    <option value="0">关闭</option>
+                    <option value="2000" selected>2 秒</option>
+                    <option value="5000">5 秒</option>
+                    <option value="10000">10 秒</option>
+                </select>
+            </span>
+        </label>
+        <span id="connection-badge" class="badge badge-unknown">
+            <span class="badge-dot"></span><span id="connection-text">连接中…</span>
+        </span>
+    </div>
+</header>
+
+<main class="layout">
+    <section class="panel panel-keys">
+        <div class="panel-head">
+            <div class="panel-title">
+                <span class="panel-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="7.5" cy="15.5" r="3.5"/>
+                        <path d="M10.2 13.2L19 4.5"/>
+                        <path d="M15 8l2 2"/>
+                        <path d="M17.5 5.5l2 2"/>
+                    </svg>
+                </span>
+                <div class="title-text">
+                    <h2>键浏览</h2>
+                </div>
+            </div>
+            <span id="key-count" class="count-pill">0 个 key</span>
+        </div>
+
+        <div class="toolbar">
+            <div class="input-wrap">
+                <span class="input-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                         stroke-linecap="round">
+                        <circle cx="11" cy="11" r="6"/>
+                        <path d="M16.5 16.5L20 20"/>
+                    </svg>
+                </span>
+                <input id="key-pattern" class="input mono" type="text" value="*" spellcheck="false"
+                       aria-label="key 匹配模式" placeholder="*">
+            </div>
+            <button id="refresh-keys" class="btn btn-secondary" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M20 11a8 8 0 1 0-2.3 5.7"/>
+                    <path d="M20 5v6h-6"/>
+                </svg>
+                <span>刷新</span>
+            </button>
+        </div>
+
+        <div id="key-list" class="key-list" role="listbox" aria-label="key 列表">
+            <p class="empty">暂无 key</p>
+        </div>
+
+        <div id="key-detail" class="key-detail hidden">
+            <div class="detail-head">
+                <div class="detail-title">
+                    <span class="detail-marker"></span>
+                    <h3>键详情</h3>
+                </div>
+                <button id="delete-key" class="btn btn-danger btn-sm" type="button">删除</button>
+            </div>
+            <div class="detail-meta">
+                <div class="meta-row">
+                    <span class="meta-label">Key</span>
+                    <span id="detail-name" class="mono meta-value"></span>
+                </div>
+                <div class="meta-row">
+                    <span class="meta-label">Type</span>
+                    <span id="detail-type" class="type-badge">—</span>
+                </div>
+            </div>
+            <div class="value-head">
+                <span class="meta-label">Value</span>
+                <button id="copy-value" class="btn btn-ghost btn-xs" type="button">复制</button>
+            </div>
+            <pre id="detail-value" class="mono value-box"></pre>
+        </div>
+    </section>
+
+    <section class="panel panel-console">
+        <div class="panel-head">
+            <div class="panel-title">
+                <span class="panel-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="4" width="18" height="16" rx="3"/>
+                        <path d="M7 9l3 3-3 3"/>
+                        <path d="M12.5 15H17"/>
+                    </svg>
+                </span>
+                <div class="title-text">
+                    <h2>命令控制台</h2>
+                </div>
+            </div>
+            <button id="clear-console" class="btn btn-ghost btn-sm" type="button">清屏</button>
+        </div>
+
+        <div class="console-quick" aria-label="快捷命令">
+            <span class="quick-label">示例</span>
+            <button type="button" class="quick-chip mono" data-command="PING">PING</button>
+            <button type="button" class="quick-chip mono" data-command="INFO">INFO</button>
+            <button type="button" class="quick-chip mono" data-command="KEYS *">KEYS *</button>
+            <button type="button" class="quick-chip mono" data-command="DBSIZE">DBSIZE</button>
+            <button type="button" class="quick-chip mono" data-command='SET demo "hello world"'>SET demo "hello world"</button>
+        </div>
+
+        <div id="console-output" class="console-output" aria-live="polite">
+            <div class="console-line console-hint">输入命令后按 Enter 执行，↑/↓ 查看历史，Ctrl+L 清屏。支持引号：SET k "hello world"。</div>
+        </div>
+
+        <form id="command-form" class="command-form" autocomplete="off">
+            <span class="prompt-mark" aria-hidden="true">❯</span>
+            <span id="prompt" class="prompt mono">127.0.0.1:6379</span>
+            <input id="command-input" class="command-input mono" type="text" spellcheck="false"
+                   placeholder="输入命令…" autofocus>
+            <button id="run-command" class="btn btn-primary" type="submit">
+                <span>执行</span>
+                <span class="btn-key">↵</span>
+            </button>
+        </form>
+    </section>
+
+    <section class="panel panel-status">
+        <div class="panel-head">
+            <div class="panel-title">
+                <span class="panel-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>
+                    </svg>
+                </span>
+                <div class="title-text">
+                    <h2>服务状态</h2>
+                </div>
+            </div>
+            <span id="status-updated" class="muted">—</span>
+        </div>
+
+        <div class="stat-grid">
+            <div class="stat">
+                <span class="stat-label">运行时长</span>
+                <span id="stat-uptime" class="stat-value">—</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">命令总数</span>
+                <span id="stat-commands" class="stat-value">—</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">连接数</span>
+                <span id="stat-clients" class="stat-value">—</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Key 数量</span>
+                <span id="stat-keys" class="stat-value">—</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">JVM 内存</span>
+                <span id="stat-memory" class="stat-value">—</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">JVM 线程</span>
+                <span id="stat-threads" class="stat-value">—</span>
+            </div>
+        </div>
+
+        <p id="status-error" class="status-error hidden"></p>
+        <div class="panel-foot">
+            <span>状态通过 INFO 命令轮询，仅本机可访问</span>
+        </div>
+    </section>
+</main>
+</body>
+</html>
