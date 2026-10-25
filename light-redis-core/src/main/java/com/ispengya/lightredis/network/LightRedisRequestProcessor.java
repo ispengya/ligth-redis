@@ -5,11 +5,39 @@ import com.ispengya.lightredis.command.DbsizeCommandExecutor;
 import com.ispengya.lightredis.command.DelCommandExecutor;
 import com.ispengya.lightredis.command.ExistsCommandExecutor;
 import com.ispengya.lightredis.command.GetCommandExecutor;
+import com.ispengya.lightredis.command.HdelCommandExecutor;
+import com.ispengya.lightredis.command.HexistsCommandExecutor;
+import com.ispengya.lightredis.command.HgetCommandExecutor;
+import com.ispengya.lightredis.command.HgetallCommandExecutor;
+import com.ispengya.lightredis.command.HkeysCommandExecutor;
+import com.ispengya.lightredis.command.HlenCommandExecutor;
+import com.ispengya.lightredis.command.HsetCommandExecutor;
+import com.ispengya.lightredis.command.HvalsCommandExecutor;
 import com.ispengya.lightredis.command.InfoCommandExecutor;
 import com.ispengya.lightredis.command.KeysCommandExecutor;
+import com.ispengya.lightredis.command.LindexCommandExecutor;
+import com.ispengya.lightredis.command.LlenCommandExecutor;
+import com.ispengya.lightredis.command.LpopCommandExecutor;
+import com.ispengya.lightredis.command.LpushCommandExecutor;
+import com.ispengya.lightredis.command.LrangeCommandExecutor;
+import com.ispengya.lightredis.command.LremCommandExecutor;
+import com.ispengya.lightredis.command.LsetCommandExecutor;
 import com.ispengya.lightredis.command.PingCommandExecutor;
+import com.ispengya.lightredis.command.RpopCommandExecutor;
+import com.ispengya.lightredis.command.RpushCommandExecutor;
+import com.ispengya.lightredis.command.SaddCommandExecutor;
+import com.ispengya.lightredis.command.ScardCommandExecutor;
 import com.ispengya.lightredis.command.SetCommandExecutor;
+import com.ispengya.lightredis.command.SismemberCommandExecutor;
+import com.ispengya.lightredis.command.SmembersCommandExecutor;
+import com.ispengya.lightredis.command.SremCommandExecutor;
 import com.ispengya.lightredis.command.TypeCommandExecutor;
+import com.ispengya.lightredis.command.ZaddCommandExecutor;
+import com.ispengya.lightredis.command.ZcardCommandExecutor;
+import com.ispengya.lightredis.command.ZrangeCommandExecutor;
+import com.ispengya.lightredis.command.ZrankCommandExecutor;
+import com.ispengya.lightredis.command.ZremCommandExecutor;
+import com.ispengya.lightredis.command.ZscoreCommandExecutor;
 import com.ispengya.lightredis.metrics.ServerStats;
 import com.ispengya.lightredis.protocol.Command;
 import com.ispengya.lightredis.protocol.CommandParser;
@@ -44,6 +72,38 @@ public class LightRedisRequestProcessor implements NettyRequestProcessor {
         dispatcher.register("KEYS", new KeysCommandExecutor());
         dispatcher.register("TYPE", new TypeCommandExecutor());
         dispatcher.register("DBSIZE", new DbsizeCommandExecutor());
+
+        dispatcher.register("LPUSH", new LpushCommandExecutor());
+        dispatcher.register("RPUSH", new RpushCommandExecutor());
+        dispatcher.register("LPOP", new LpopCommandExecutor());
+        dispatcher.register("RPOP", new RpopCommandExecutor());
+        dispatcher.register("LLEN", new LlenCommandExecutor());
+        dispatcher.register("LRANGE", new LrangeCommandExecutor());
+        dispatcher.register("LINDEX", new LindexCommandExecutor());
+        dispatcher.register("LSET", new LsetCommandExecutor());
+        dispatcher.register("LREM", new LremCommandExecutor());
+
+        dispatcher.register("HSET", new HsetCommandExecutor());
+        dispatcher.register("HGET", new HgetCommandExecutor());
+        dispatcher.register("HDEL", new HdelCommandExecutor());
+        dispatcher.register("HEXISTS", new HexistsCommandExecutor());
+        dispatcher.register("HLEN", new HlenCommandExecutor());
+        dispatcher.register("HGETALL", new HgetallCommandExecutor());
+        dispatcher.register("HKEYS", new HkeysCommandExecutor());
+        dispatcher.register("HVALS", new HvalsCommandExecutor());
+
+        dispatcher.register("SADD", new SaddCommandExecutor());
+        dispatcher.register("SREM", new SremCommandExecutor());
+        dispatcher.register("SMEMBERS", new SmembersCommandExecutor());
+        dispatcher.register("SISMEMBER", new SismemberCommandExecutor());
+        dispatcher.register("SCARD", new ScardCommandExecutor());
+
+        dispatcher.register("ZADD", new ZaddCommandExecutor());
+        dispatcher.register("ZREM", new ZremCommandExecutor());
+        dispatcher.register("ZSCORE", new ZscoreCommandExecutor());
+        dispatcher.register("ZCARD", new ZcardCommandExecutor());
+        dispatcher.register("ZRANGE", new ZrangeCommandExecutor());
+        dispatcher.register("ZRANK", new ZrankCommandExecutor());
     }
 
     @Override

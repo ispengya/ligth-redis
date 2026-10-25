@@ -134,16 +134,51 @@
         </div>
 
         <div class="console-quick" aria-label="快捷命令">
-            <span class="quick-label">示例</span>
-            <button type="button" class="quick-chip mono" data-command="PING">PING</button>
-            <button type="button" class="quick-chip mono" data-command="INFO">INFO</button>
-            <button type="button" class="quick-chip mono" data-command="KEYS *">KEYS *</button>
-            <button type="button" class="quick-chip mono" data-command="DBSIZE">DBSIZE</button>
-            <button type="button" class="quick-chip mono" data-command='SET demo "hello world"'>SET demo "hello world"</button>
+            <span class="quick-label">快捷命令</span>
+
+            <div class="quick-group">
+                <span class="quick-group-label">通用</span>
+                <button type="button" class="quick-chip mono" data-command="PING">PING</button>
+                <button type="button" class="quick-chip mono" data-command="INFO">INFO</button>
+                <button type="button" class="quick-chip mono" data-command="KEYS demo:*">KEYS demo:*</button>
+                <button type="button" class="quick-chip mono" data-command="DBSIZE">DBSIZE</button>
+            </div>
+
+            <div class="quick-group">
+                <span class="quick-group-label">String</span>
+                <button type="button" class="quick-chip mono"
+                        data-command='SET demo:string "hello world"'>SET demo:string "hello world"</button>
+                <button type="button" class="quick-chip mono" data-command="GET demo:string">GET demo:string</button>
+            </div>
+
+            <div class="quick-group">
+                <span class="quick-group-label">List</span>
+                <button type="button" class="quick-chip mono" data-command="RPUSH demo:list a b c">RPUSH demo:list a b c</button>
+                <button type="button" class="quick-chip mono" data-command="LRANGE demo:list 0 -1">LRANGE demo:list 0 -1</button>
+            </div>
+
+            <div class="quick-group">
+                <span class="quick-group-label">Hash</span>
+                <button type="button" class="quick-chip mono" data-command="HSET demo:hash name tom">HSET demo:hash name tom</button>
+                <button type="button" class="quick-chip mono" data-command="HGETALL demo:hash">HGETALL demo:hash</button>
+            </div>
+
+            <div class="quick-group">
+                <span class="quick-group-label">Set</span>
+                <button type="button" class="quick-chip mono" data-command="SADD demo:set a b c">SADD demo:set a b c</button>
+                <button type="button" class="quick-chip mono" data-command="SMEMBERS demo:set">SMEMBERS demo:set</button>
+            </div>
+
+            <div class="quick-group">
+                <span class="quick-group-label">ZSet</span>
+                <button type="button" class="quick-chip mono" data-command="ZADD demo:zset 1 one 2 two">ZADD demo:zset 1 one 2 two</button>
+                <button type="button" class="quick-chip mono"
+                        data-command="ZRANGE demo:zset 0 -1 WITHSCORES">ZRANGE demo:zset 0 -1 WITHSCORES</button>
+            </div>
         </div>
 
         <div id="console-output" class="console-output" aria-live="polite">
-            <div class="console-line console-hint">输入命令后按 Enter 执行，↑/↓ 查看历史，Ctrl+L 清屏。支持引号：SET k "hello world"。</div>
+            <div class="console-line console-hint">输入命令后按 Enter 执行，点击上方快捷命令可填入，↑/↓ 查看历史，Ctrl+L 清屏。支持引号：SET k "hello world"。</div>
         </div>
 
         <form id="command-form" class="command-form" autocomplete="off">

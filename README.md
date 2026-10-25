@@ -7,7 +7,8 @@
 - Maven 多模块：`light-redis-core` / `light-redis-client` / `light-redis-cli` / `light-redis-panel`
 - 使用 Netty + 自研 remoting 框架作为通信层
 - 简化文本协议（后续可以替换为 RESP）
-- 支持 String 类型的基础命令：`PING`、`GET`、`SET`、`DEL`、`EXISTS`
+- 支持 String / List / Hash / Set / Sorted Set 五种数据类型
+- 支持基础数据结构命令，例如 `SET`、`GET`、`LPUSH`、`LRANGE`、`HSET`、`SADD`、`ZADD`
 - 支持服务端观测命令：`INFO`、`KEYS`、`TYPE`、`DBSIZE`
 - 提供本地 Web 控制台：命令控制台、键浏览、服务状态
 - 线程模型参考 Redis 6：IO 多线程 + 命令单线程执行
@@ -165,6 +166,8 @@ hello
 
 面板是独立进程，通过客户端核心连接 light-redis，提供命令控制台、键浏览和服务状态。
 
+命令控制台顶部按通用、String、List、Hash、Set、ZSet 分组提供快捷命令，点击填入输入框后按 Enter 执行；写命令完成后会自动刷新 key 列表。
+
 ### 启动
 
 先启动 server，再启动面板：
@@ -231,17 +234,63 @@ curl -s -X DELETE \
 
 在当前简化文本协议下，客户端直接输入：
 
+### 通用命令
+
 - `PING` → 返回 `PONG`
-- `SET key value` → 返回 `OK`
-- `GET key` → 返回 value 或 `(nil)`
 - `DEL key [key ...]` → 返回删除成功的 key 数量
 - `EXISTS key` → 存在返回 `1`，不存在返回 `0`
-- `INFO` → 返回运行时长、命令总数、活跃连接数、key 数量、JVM 内存和线程数（逐行 `key:value`）
+- `TYPE key` → 返回 `string`、`list`、`hash`、`set`、`zset` 或 `none`
 - `KEYS pattern` → 按 glob 模式返回 key，换行分隔；支持 `*` 和 `?`
-- `TYPE key` → 返回 `string` 或 `none`
 - `DBSIZE` → 返回 key 总数
+- `INFO` → 返回运行时长、命令总数、活跃连接数、key 数量、JVM 内存和线程数（逐行 `key:value`）
+
+### String
+
+- `SET key value` → 返回 `OK`，可以覆盖任意类型的 key
+- `GET key` → 返回 value 或 `(nil)`
+- 对非 String 类型执行 `GET` 会返回 `WRONGTYPE ...`
+
+### List
+
+- `LPUSH key element [element ...]` → 从表头插入，返回列表长度
+- `RPUSH key element [element ...]` → 从表尾插入，返回列表长度
+- `LPOP key` / `RPOP key` → 弹出表头或表尾元素，空列表返回 `(nil)` 并删除 key
+- `LLEN key` → 返回列表长度
+- `LRANGE key start stop` → 返回闭区间内的元素，支持负数索引
+- `LINDEX key index` → 返回指定索引元素
+- `LSET key index element` → 修改指定索引元素
+- `LREM key count element` → 删除元素，`count` 为正数从表头、负数从表尾、0 表示全部
+
+### Hash
+
+- `HSET key field value [field value ...]` → 设置字段，返回新增字段数量
+- `HGET key field` → 返回字段值或 `(nil)`
+- `HDEL key field [field ...]` → 删除字段，返回删除数量
+- `HEXISTS key field` → 存在返回 `1`，不存在返回 `0`
+- `HLEN key` → 返回字段数量
+- `HGETALL key` → 按字段、值交替逐行输出
+- `HKEYS key` / `HVALS key` → 逐行输出所有字段名或字段值
+
+### Set
+
+- `SADD key member [member ...]` → 添加成员，返回新增数量
+- `SREM key member [member ...]` → 删除成员，返回删除数量
+- `SMEMBERS key` → 逐行输出所有成员
+- `SISMEMBER key member` → 存在返回 `1`，不存在返回 `0`
+- `SCARD key` → 返回成员数量
+
+### Sorted Set
+
+- `ZADD key score member [score member ...]` → 添加或更新成员，返回新增成员数量
+- `ZREM key member [member ...]` → 删除成员，返回删除数量
+- `ZSCORE key member` → 返回成员分值或 `(nil)`
+- `ZCARD key` → 返回成员数量
+- `ZRANGE key start stop [WITHSCORES]` → 按分值升序返回成员；使用 `WITHSCORES` 时每行格式为 `member score`
+- `ZRANK key member` → 返回从 0 开始的名次
 
 注意：
+- 列表、集合、哈希和有序集合的多个元素使用换行分隔，字符串内容本身不建议包含换行。
+- 集合类 key 在删除最后一个元素后会自动删除，和 Redis 的行为一致。
 - 目前协议是按空白分隔的简单文本协议，尚未实现 RESP。
 - 参数支持引号和反斜杠转义，见下方「命令参数语法」。
 
@@ -276,7 +325,7 @@ curl -s -X DELETE \
 - 协议层：
   - 从简单文本协议演进到 RESP 协议
 - 存储层：
-  - 增加 List / Hash / Set / Sorted Set 等数据结构
+  - 增加集合运算、`MGET` / `MSET`、`SCAN`、`ZREVRANGE` 等命令
 - 过期与 TTL：
   - `EXPIRE` / `TTL`，惰性删除 + 定期扫描
 - 持久化：

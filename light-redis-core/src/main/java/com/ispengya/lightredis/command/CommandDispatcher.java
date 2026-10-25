@@ -2,6 +2,7 @@ package com.ispengya.lightredis.command;
 
 import com.ispengya.lightredis.protocol.Command;
 import com.ispengya.lightredis.store.KeyValueStore;
+import com.ispengya.lightredis.store.WrongTypeException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -36,6 +37,10 @@ public class CommandDispatcher {
         if (executor == null) {
             return "ERR unknown command " + command.getName();
         }
-        return executor.execute(command, store);
+        try {
+            return executor.execute(command, store);
+        } catch (WrongTypeException e) {
+            return e.getMessage();
+        }
     }
 }

@@ -257,14 +257,27 @@ public class PanelApiHandler implements HttpHandler {
                 return;
             }
 
-            Object value = null;
+            String quotedName = quoteArgument(name);
+            String value = null;
+            String valueCommand = null;
             if ("string".equals(type)) {
-                String stringValue = client.execute("GET " + quoteArgument(name));
-                if (isErrorReply(stringValue)) {
-                    writeError(exchange, 400, stringValue);
+                valueCommand = "GET " + quotedName;
+            } else if ("list".equals(type)) {
+                valueCommand = "LRANGE " + quotedName + " 0 -1";
+            } else if ("hash".equals(type)) {
+                valueCommand = "HGETALL " + quotedName;
+            } else if ("set".equals(type)) {
+                valueCommand = "SMEMBERS " + quotedName;
+            } else if ("zset".equals(type)) {
+                valueCommand = "ZRANGE " + quotedName + " 0 -1 WITHSCORES";
+            }
+            if (valueCommand != null) {
+                String detailValue = client.execute(valueCommand);
+                if (isErrorReply(detailValue)) {
+                    writeError(exchange, 400, detailValue);
                     return;
                 }
-                value = stringValue;
+                value = detailValue;
             }
 
             Map<String, Object> result = new LinkedHashMap<>();

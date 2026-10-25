@@ -2,6 +2,8 @@ package com.ispengya.lightredis.command;
 
 import com.ispengya.lightredis.protocol.Command;
 import com.ispengya.lightredis.store.KeyValueStore;
+import com.ispengya.lightredis.store.StringValue;
+import com.ispengya.lightredis.store.ValueSupport;
 
 import java.util.List;
 
@@ -13,11 +15,10 @@ public class GetCommandExecutor implements CommandExecutor {
         if (args.size() != 1) {
             return "ERR wrong number of arguments for GET";
         }
-        String key = args.get(0);
-        String value = store.get(key);
+        StringValue value = ValueSupport.string(store, args.get(0));
         if (value == null) {
             return "(nil)";
         }
-        return value;
+        return value.getValue();
     }
 }

@@ -4,6 +4,14 @@
     const HISTORY_KEY = 'light-redis-panel.command-history';
     const MAX_HISTORY = 100;
     const MAX_CONSOLE_LINES = 500;
+    const CONSOLE_HINT = '输入命令后按 Enter 执行，点击上方快捷命令可填入，↑/↓ 查看历史，Ctrl+L 清屏。支持引号：SET k "hello world"。';
+    const KEY_MUTATING_COMMANDS = new Set([
+        'SET', 'DEL',
+        'LPUSH', 'RPUSH', 'LPOP', 'RPOP', 'LSET', 'LREM',
+        'HSET', 'HDEL',
+        'SADD', 'SREM',
+        'ZADD', 'ZREM'
+    ]);
 
     const state = {
         selectedKey: null,
@@ -75,6 +83,7 @@
 
     function bindEvents() {
         for (const chip of document.querySelectorAll('.quick-chip')) {
+            chip.title = '填入命令后按 Enter 执行';
             chip.addEventListener('click', () => {
                 const command = chip.dataset.command || '';
                 elements.commandInput.value = command;
@@ -159,7 +168,7 @@
             appendReply(result);
             if (result.ok) {
                 const verb = command.split(/\s+/)[0].toUpperCase();
-                if (verb === 'SET' || verb === 'DEL') {
+                if (KEY_MUTATING_COMMANDS.has(verb)) {
                     refreshKeys();
                 }
             }
@@ -458,7 +467,7 @@
         elements.consoleOutput.textContent = '';
         const hint = document.createElement('div');
         hint.className = 'console-line console-hint';
-        hint.textContent = '输入命令后按 Enter 执行，↑/↓ 查看历史，Ctrl+L 清屏。支持引号：SET k "hello world"。';
+        hint.textContent = CONSOLE_HINT;
         elements.consoleOutput.appendChild(hint);
         elements.commandInput.focus();
     }
