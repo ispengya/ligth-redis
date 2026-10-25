@@ -4,6 +4,7 @@
 
 当前状态：
 - 单机版、内存存储
+- Maven 多模块：`light-redis-core` / `light-redis-client` / `light-redis-cli` / `light-redis-panel`
 - 使用 Netty + 自研 remoting 框架作为通信层
 - 简化文本协议（后续可以替换为 RESP）
 - 支持 String 类型的基础命令：`PING`、`GET`、`SET`、`DEL`、`EXISTS`
@@ -11,25 +12,39 @@
 - 提供本地 Web 控制台：命令控制台、键浏览、服务状态
 - 线程模型参考 Redis 6：IO 多线程 + 命令单线程执行
 
-## 目录结构
+## 模块结构
 
-- `pom.xml`：Maven 配置，依赖自研 `remoting-core` 和 `picocli`
-- `docs/project.md`：整体设计文档与模块说明
-- `server.sh`：启动 server 的脚本（需要 bash/WSL/Git Bash）
-- `cli.sh`：启动命令行客户端的脚本
-- `panel.sh`：启动本地 Web 控制台的脚本
-- `src/main/java/com/ispengya/lightredis/bootstrap/LightRedisApplication.java`：服务启动入口
-- `src/main/java/com/ispengya/lightredis/client/LightRedisCli.java`：基于 picocli 的交互式 CLI
-- `src/main/java/com/ispengya/lightredis/client/LightRedisClient.java`：客户端核心接口，面板和后续 SDK 复用
-- `src/main/java/com/ispengya/lightredis/metrics/*`：服务端运行指标（供 `INFO` 读取）
-- `src/main/java/com/ispengya/lightredis/panel/*`：本地 Web 控制台后端（HTTP API + 静态页面）
-- `src/main/resources/web/*`：面板前端页面
-- `src/main/java/com/ispengya/lightredis/network/LightRedisRequestProcessor.java`：请求处理与命令分发入口
-- `src/main/java/com/ispengya/lightredis/protocol/*`：简化协议解析（文本命令 → Command）
-- `src/main/java/com/ispengya/lightredis/command/*`：命令分发与各命令执行器
-- `src/main/java/com/ispengya/lightredis/store/*`：内存存储引擎（String 类型）
+项目采用 Maven 多模块，根 `pom.xml` 只负责聚合与版本管理：
 
-更多架构细节请参考 [project.md](file:///d:/workspace/light-redis/docs/project.md)。
+```text
+light-redis/
+├── pom.xml                  # 父 POM：modules、依赖版本、编译插件
+├── light-redis-core/        # 服务端：协议、命令、存储、指标、启动入口
+├── light-redis-client/      # 客户端核心：LightRedisClient / RemotingLightRedisClient
+├── light-redis-cli/         # picocli 交互式 CLI
+├── light-redis-panel/       # 本地 Web 控制台（HTTP API + 前端资源）
+├── server.sh
+├── cli.sh
+└── panel.sh
+```
+
+模块依赖方向：
+
+```text
+light-redis-core     -> remoting-core
+light-redis-client   -> remoting-core
+light-redis-cli      -> light-redis-client + picocli
+light-redis-panel    -> light-redis-client + picocli
+```
+
+`light-redis-core` 不依赖任何客户端或展示模块；面板和 CLI 都通过 `light-redis-client` 访问服务端，后续 SDK 也复用这一层。
+
+各模块职责：
+
+- `light-redis-core`：`bootstrap`、`network`、`protocol`、`command`、`store`、`metrics`
+- `light-redis-client`：同步/异步命令调用、连接管理，CLI 与面板共用
+- `light-redis-cli`：基于 picocli 的交互式命令行客户端
+- `light-redis-panel`：JDK HttpServer API、静态资源、前端页面
 
 ## 环境要求
 
@@ -38,17 +53,23 @@
 - 已安装并 `mvn install` 过自研项目 `netty-remoting-framework`
   - 路径示例：`d:\workspace\netty-remoting-framework`
   - 在该项目根目录执行一次：`mvn install -DskipTests`
-- 推荐在 Windows 下使用 WSL 或 Git Bash 运行 `server.sh` / `cli.sh`，也可以在 IDE 中直接运行 main 方法。
+- 推荐在 Windows 下使用 WSL 或 Git Bash 运行 `server.sh` / `cli.sh` / `panel.sh`，也可以在 IDE 中直接运行 main 方法。
 
 ## 构建
 
 在 `light-redis` 根目录执行：
 
 ```bash
+mvn clean install -DskipTests
+```
+
+只想编译不安装到本地仓库时用：
+
+```bash
 mvn compile
 ```
 
-如果仅使用 IDE 运行，也可以直接由 IDE 触发构建。
+`server.sh` / `cli.sh` / `panel.sh` 使用 `mvn -f <module>/pom.xml compile exec:java` 启动对应模块；CLI 和面板会先安装 `light-redis-client`，因此不要求手动提前执行 `install`。
 
 ## 启动 server
 
@@ -62,7 +83,8 @@ cd /mnt/d/workspace/light-redis   # 根据实际挂载路径调整
 `server.sh` 的行为等价于：
 
 ```bash
-mvn compile exec:java "-Dexec.mainClass=com.ispengya.lightredis.bootstrap.LightRedisApplication"
+mvn -q -f light-redis-core/pom.xml compile exec:java \
+  "-Dexec.mainClass=com.ispengya.lightredis.bootstrap.LightRedisApplication"
 ```
 
 默认监听：`127.0.0.1:6379`。
@@ -93,8 +115,8 @@ cd /mnt/d/workspace/light-redis
 内部等价命令：
 
 ```bash
-mvn compile exec:java \
-  "-Dexec.mainClass=com.ispengya.lightredis.client.LightRedisCli" \
+mvn -q -f light-redis-cli/pom.xml compile exec:java \
+  "-Dexec.mainClass=com.ispengya.lightredis.cli.LightRedisCli" \
   "-Dexec.args=--host=${HOST} --port=${PORT}"
 ```
 
@@ -102,7 +124,8 @@ mvn compile exec:java \
 
 ```bash
 cd d:\workspace\light-redis
-mvn compile exec:java "-Dexec.mainClass=com.ispengya.lightredis.client.LightRedisCli"
+mvn -f light-redis-cli/pom.xml compile exec:java \
+  "-Dexec.mainClass=com.ispengya.lightredis.cli.LightRedisCli"
 ```
 
 常用参数（由 picocli 解析）：
@@ -116,8 +139,8 @@ mvn compile exec:java "-Dexec.mainClass=com.ispengya.lightredis.client.LightRedi
 示例：
 
 ```bash
-mvn compile exec:java \
-  "-Dexec.mainClass=com.ispengya.lightredis.client.LightRedisCli" \
+mvn -f light-redis-cli/pom.xml compile exec:java \
+  "-Dexec.mainClass=com.ispengya.lightredis.cli.LightRedisCli" \
   "-Dexec.args=--host=127.0.0.1 --port=6379 --timeout=8000"
 ```
 
@@ -148,8 +171,8 @@ hello
 
 ```bash
 ./panel.sh
-# 或
-mvn compile exec:java \
+# 或（先确保 client 已 install）
+mvn -f light-redis-panel/pom.xml compile exec:java \
   "-Dexec.mainClass=com.ispengya.lightredis.panel.LightRedisPanelApplication" \
   "-Dexec.args=--redis-host=127.0.0.1 --redis-port=6379 --http-port=8080"
 ```
@@ -260,5 +283,3 @@ curl -s -X DELETE \
   - 简化版 RDB / AOF
 - 发布订阅：
   - `PUBLISH` / `SUBSCRIBE` 等
-
-设计与实现顺序可参考 [docs/project.md](file:///d:/workspace/light-redis/docs/project.md) 中的建议。

@@ -1,5 +1,6 @@
-package com.ispengya.lightredis.client;
+package com.ispengya.lightredis.cli;
 
+import com.ispengya.lightredis.client.RemotingLightRedisClient;
 import picocli.CommandLine;
 
 import java.io.BufferedReader;
