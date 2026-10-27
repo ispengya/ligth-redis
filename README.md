@@ -3,12 +3,13 @@
 一个使用 Java 实现的轻量级 Redis 学习项目，目标是体验 Redis 的整体架构设计和核心模块，而不是做一个完全兼容的生产版本。
 
 当前状态：
-- 单机版、内存存储
+- 单机版、内存存储 + AOF 持久化
 - Maven 多模块：`light-redis-core` / `light-redis-client` / `light-redis-cli` / `light-redis-panel`
 - 使用 Netty + 自研 remoting 框架作为通信层
 - 简化文本协议（后续可以替换为 RESP）
 - 支持 String / List / Hash / Set / Sorted Set 五种数据类型
 - 支持基础数据结构命令，例如 `SET`、`GET`、`LPUSH`、`LRANGE`、`HSET`、`SADD`、`ZADD`
+- 支持 AOF 持久化：写命令先写入 mini-file-storage，启动时通过自定义恢复索引回放
 - 支持服务端观测命令：`INFO`、`KEYS`、`TYPE`、`DBSIZE`
 - 提供本地 Web 控制台：命令控制台、键浏览、服务状态
 - 线程模型参考 Redis 6：IO 多线程 + 命令单线程执行
@@ -20,7 +21,7 @@
 ```text
 light-redis/
 ├── pom.xml                  # 父 POM：modules、依赖版本、编译插件
-├── light-redis-core/        # 服务端：协议、命令、存储、指标、启动入口
+├── light-redis-core/        # 服务端：协议、命令、存储、持久化、指标、启动入口
 ├── light-redis-client/      # 客户端核心：LightRedisClient / RemotingLightRedisClient
 ├── light-redis-cli/         # picocli 交互式 CLI
 ├── light-redis-panel/       # 本地 Web 控制台（HTTP API + 前端资源）
@@ -32,7 +33,7 @@ light-redis/
 模块依赖方向：
 
 ```text
-light-redis-core     -> remoting-core
+light-redis-core     -> remoting-core + file-storage
 light-redis-client   -> remoting-core
 light-redis-cli      -> light-redis-client + picocli
 light-redis-panel    -> light-redis-client + picocli
@@ -42,7 +43,7 @@ light-redis-panel    -> light-redis-client + picocli
 
 各模块职责：
 
-- `light-redis-core`：`bootstrap`、`network`、`protocol`、`command`、`store`、`metrics`
+- `light-redis-core`：`bootstrap`、`network`、`protocol`、`command`、`store`、`persistence`、`metrics`
 - `light-redis-client`：同步/异步命令调用、连接管理，CLI 与面板共用
 - `light-redis-cli`：基于 picocli 的交互式命令行客户端
 - `light-redis-panel`：JDK HttpServer API、静态资源、前端页面
@@ -54,6 +55,10 @@ light-redis-panel    -> light-redis-client + picocli
 - 已安装并 `mvn install` 过自研项目 `netty-remoting-framework`
   - 路径示例：`d:\workspace\netty-remoting-framework`
   - 在该项目根目录执行一次：`mvn install -DskipTests`
+- 已安装并 `mvn install` 过自研文件存储 SDK `mini-file-storage`
+  - 路径示例：`d:\github\mini-file-storage`
+  - 在该项目根目录执行一次：`mvn install -DskipTests`
+  - light-redis 通过 `com.ispengya:file-storage:1.0-SNAPSHOT` 引入
 - 推荐在 Windows 下使用 WSL 或 Git Bash 运行 `server.sh` / `cli.sh` / `panel.sh`，也可以在 IDE 中直接运行 main 方法。
 
 ## 构建
@@ -81,14 +86,60 @@ cd /mnt/d/workspace/light-redis   # 根据实际挂载路径调整
 ./server.sh
 ```
 
-`server.sh` 的行为等价于：
+`server.sh` 默认开启 AOF，数据目录为 `./data/light-redis`。支持两个环境变量：
+
+- `DATA_DIR`：AOF 数据目录
+- `APPENDONLY`：`yes` 或 `no`，默认 `yes`
+
+例如使用临时目录关闭持久化：
+
+```bash
+DATA_DIR=./data/tmp APPENDONLY=no ./server.sh
+```
+
+也可以直接传递服务端参数：
+
+```bash
+./server.sh --appendonly=no
+./server.sh --data-dir=./data/demo --appendonly=yes
+```
+
+脚本内部等价于：
 
 ```bash
 mvn -q -f light-redis-core/pom.xml compile exec:java \
-  "-Dexec.mainClass=com.ispengya.lightredis.bootstrap.LightRedisApplication"
+  "-Dexec.mainClass=com.ispengya.lightredis.bootstrap.LightRedisApplication" \
+  "-Dexec.args=--data-dir=./data/light-redis --appendonly=yes"
 ```
 
+服务端参数：
+
+- `--data-dir <path>`：AOF 数据目录，默认 `./data/light-redis`
+- `--appendonly <yes|no>`：是否开启 AOF，默认 `yes`
+- `-h` / `--help`：查看帮助
+
 默认监听：`127.0.0.1:6379`。
+
+### 持久化说明
+
+- 写命令先追加到 mini-file-storage 的 CommitLog，追加成功后才修改内存
+- 启动时通过自定义 `RedisRecoveryIndex` 自动回放历史命令，不使用手动 `scan`
+- AOF 关闭时写命令直接执行，不创建数据目录
+- 每条命令默认 `syncFlush=true`，返回客户端前会强制刷盘
+- 因为先写日志后执行，语法或类型错误的写命令也会进入日志，恢复时记录警告并跳过
+- 当前没有 AOF rewrite / 日志压缩，日志会持续增长
+- 内置 ConsumeQueue 和 KeyIndex 未启用，只使用自定义恢复索引
+- `store.properties` 会固定 CommitLog 分段大小和单条记录上限，修改这些配置需要迁移数据目录
+
+磁盘目录结构由 mini-file-storage 生成：
+
+```text
+data/light-redis/
+├── data/                 # CommitLog 分段文件
+├── store.properties      # 磁盘格式和尺寸元数据
+├── checkpoint.properties # 刷盘水位
+└── .store.lock           # 进程独占锁
+```
 
 ### 方式二：IDE 直接运行
 
@@ -96,7 +147,7 @@ mvn -q -f light-redis-core/pom.xml compile exec:java \
 
 - `com.ispengya.lightredis.bootstrap.LightRedisApplication`
 
-直接运行其 `main` 方法即可。
+直接运行其 `main` 方法即可。默认开启 AOF，也可以添加 `--appendonly=no` 参数关闭。
 
 ## 启动 CLI（命令行客户端）
 
@@ -167,6 +218,10 @@ hello
 面板是独立进程，通过客户端核心连接 light-redis，提供命令控制台、键浏览和服务状态。
 
 命令控制台顶部按通用、String、List、Hash、Set、ZSet 分组提供快捷命令，点击填入输入框后按 Enter 执行；写命令完成后会自动刷新 key 列表。
+
+键浏览按 key 中的 `:` 自动分层折叠，目录节点显示后代 key 数量；大分组默认折叠，小分组默认展开，可点击箭头逐层展开。
+
+中间区域提供「命令控制台 / 键详情」两个标签页。点击左侧 key 会自动切到键详情，切回控制台后命令输出和输入状态仍会保留。
 
 ### 启动
 
@@ -329,6 +384,7 @@ curl -s -X DELETE \
 - 过期与 TTL：
   - `EXPIRE` / `TTL`，惰性删除 + 定期扫描
 - 持久化：
-  - 简化版 RDB / AOF
+  - AOF rewrite / 日志压缩
+  - 简化版 RDB 快照
 - 发布订阅：
   - `PUBLISH` / `SUBSCRIBE` 等

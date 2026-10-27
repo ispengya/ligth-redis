@@ -85,34 +85,10 @@
             </button>
         </div>
 
-        <div id="key-list" class="key-list" role="listbox" aria-label="key 列表">
+        <div id="key-list" class="key-list" role="tree" aria-label="key 树">
             <p class="empty">暂无 key</p>
         </div>
 
-        <div id="key-detail" class="key-detail hidden">
-            <div class="detail-head">
-                <div class="detail-title">
-                    <span class="detail-marker"></span>
-                    <h3>键详情</h3>
-                </div>
-                <button id="delete-key" class="btn btn-danger btn-sm" type="button">删除</button>
-            </div>
-            <div class="detail-meta">
-                <div class="meta-row">
-                    <span class="meta-label">Key</span>
-                    <span id="detail-name" class="mono meta-value"></span>
-                </div>
-                <div class="meta-row">
-                    <span class="meta-label">Type</span>
-                    <span id="detail-type" class="type-badge">—</span>
-                </div>
-            </div>
-            <div class="value-head">
-                <span class="meta-label">Value</span>
-                <button id="copy-value" class="btn btn-ghost btn-xs" type="button">复制</button>
-            </div>
-            <pre id="detail-value" class="mono value-box"></pre>
-        </div>
     </section>
 
     <section class="panel panel-console">
@@ -126,13 +102,17 @@
                         <path d="M12.5 15H17"/>
                     </svg>
                 </span>
-                <div class="title-text">
-                    <h2>命令控制台</h2>
+                <div class="main-tabs" role="tablist" aria-label="主面板">
+                    <button id="tab-console" class="main-tab active" type="button" role="tab"
+                            aria-selected="true" aria-controls="console-view">命令控制台</button>
+                    <button id="tab-detail" class="main-tab" type="button" role="tab"
+                            aria-selected="false" aria-controls="detail-view">键详情</button>
                 </div>
             </div>
             <button id="clear-console" class="btn btn-ghost btn-sm" type="button">清屏</button>
         </div>
 
+        <div id="console-view" class="tab-view console-view" role="tabpanel" aria-labelledby="tab-console">
         <div class="console-quick" aria-label="快捷命令">
             <span class="quick-label">快捷命令</span>
 
@@ -191,6 +171,39 @@
                 <span class="btn-key">↵</span>
             </button>
         </form>
+        </div>
+
+        <div id="detail-view" class="tab-view detail-view hidden" role="tabpanel" aria-labelledby="tab-detail">
+            <div id="detail-empty" class="detail-empty">
+                <span class="detail-empty-title">没有选中的 key</span>
+                <span>从左侧 key 树点击一个 key 查看详情</span>
+            </div>
+
+            <div id="key-detail" class="key-detail hidden">
+                <div class="detail-head">
+                    <div class="detail-title">
+                        <span class="detail-marker"></span>
+                        <h3>键详情</h3>
+                    </div>
+                    <button id="delete-key" class="btn btn-danger btn-sm" type="button">删除</button>
+                </div>
+                <div class="detail-meta">
+                    <div class="meta-row">
+                        <span class="meta-label">Key</span>
+                        <span id="detail-name" class="mono meta-value"></span>
+                    </div>
+                    <div class="meta-row">
+                        <span class="meta-label">Type</span>
+                        <span id="detail-type" class="type-badge">—</span>
+                    </div>
+                </div>
+                <div class="value-head">
+                    <span class="meta-label">Value</span>
+                    <button id="copy-value" class="btn btn-ghost btn-xs" type="button">复制</button>
+                </div>
+                <pre id="detail-value" class="mono value-box"></pre>
+            </div>
+        </div>
     </section>
 
     <section class="panel panel-status">

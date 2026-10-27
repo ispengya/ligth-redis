@@ -4,6 +4,8 @@
     const HISTORY_KEY = 'light-redis-panel.command-history';
     const MAX_HISTORY = 100;
     const MAX_CONSOLE_LINES = 500;
+    const DEFAULT_EXPANDED_CHILDREN = 20;
+    const SMALL_KEYSET_EXPAND_LIMIT = 50;
     const CONSOLE_HINT = '输入命令后按 Enter 执行，点击上方快捷命令可填入，↑/↓ 查看历史，Ctrl+L 清屏。支持引号：SET k "hello world"。';
     const KEY_MUTATING_COMMANDS = new Set([
         'SET', 'DEL',
@@ -21,7 +23,10 @@
         busy: false,
         statusInFlight: false,
         refreshTimer: null,
-        redisAddress: '127.0.0.1:6379'
+        redisAddress: '127.0.0.1:6379',
+        currentKeys: [],
+        expandedPaths: new Set(),
+        collapsedPaths: new Set()
     };
 
     const elements = {
@@ -44,6 +49,11 @@
         commandInput: document.getElementById('command-input'),
         runCommand: document.getElementById('run-command'),
         clearConsole: document.getElementById('clear-console'),
+        consoleTab: document.getElementById('tab-console'),
+        detailTab: document.getElementById('tab-detail'),
+        consoleView: document.getElementById('console-view'),
+        detailView: document.getElementById('detail-view'),
+        detailEmpty: document.getElementById('detail-empty'),
         refreshInterval: document.getElementById('refresh-interval'),
         statusUpdated: document.getElementById('status-updated'),
         statusError: document.getElementById('status-error'),
@@ -91,6 +101,8 @@
                 elements.commandInput.setSelectionRange(command.length, command.length);
             });
         }
+        elements.consoleTab.addEventListener('click', () => setMainTab('console'));
+        elements.detailTab.addEventListener('click', () => setMainTab('detail'));
         elements.commandForm.addEventListener('submit', onSubmit);
         elements.clearConsole.addEventListener('click', clearConsole);
         elements.refreshKeys.addEventListener('click', refreshKeys);
@@ -110,6 +122,24 @@
                 clearConsole();
             }
         });
+    }
+
+    function setMainTab(tab) {
+        const showConsole = tab === 'console';
+        elements.consoleTab.classList.toggle('active', showConsole);
+        elements.detailTab.classList.toggle('active', !showConsole);
+        elements.consoleTab.setAttribute('aria-selected', String(showConsole));
+        elements.detailTab.setAttribute('aria-selected', String(!showConsole));
+        elements.consoleView.classList.toggle('hidden', !showConsole);
+        elements.detailView.classList.toggle('hidden', showConsole);
+        elements.clearConsole.classList.toggle('hidden', !showConsole);
+        if (showConsole) {
+            try {
+                elements.commandInput.focus({ preventScroll: true });
+            } catch (error) {
+                elements.commandInput.focus();
+            }
+        }
     }
 
     async function request(path, options) {
@@ -229,10 +259,11 @@
     }
 
     function renderKeys(keys) {
-        elements.keyList.textContent = '';
+        state.currentKeys = keys;
         elements.keyCount.textContent = keys.length + ' 个 key';
 
         if (keys.length === 0) {
+            elements.keyList.textContent = '';
             const empty = document.createElement('p');
             empty.className = 'empty';
             empty.textContent = '没有匹配的 key';
@@ -241,23 +272,186 @@
             return;
         }
 
-        let selectedExists = false;
-        for (const key of keys) {
-            const item = document.createElement('button');
-            item.type = 'button';
-            item.className = 'key-item mono';
-            item.textContent = key;
-            item.dataset.key = key;
-            item.addEventListener('click', () => selectKey(key));
-            if (key === state.selectedKey) {
-                item.classList.add('active');
-                selectedExists = true;
-            }
-            elements.keyList.appendChild(item);
+        if (state.selectedKey) {
+            expandAncestors(state.selectedKey);
         }
+        renderTree();
 
-        if (!selectedExists) {
+        if (!state.selectedKey || !keys.includes(state.selectedKey)) {
             clearKeyDetail();
+        }
+    }
+
+    function buildKeyTree(keys) {
+        const root = createTreeNode('', '');
+        for (const key of keys) {
+            const segments = key.split(':');
+            let node = root;
+            node.keyCount++;
+            let path = '';
+            for (let i = 0; i < segments.length; i++) {
+                const segment = segments[i];
+                path = i === 0 ? segment : path + ':' + segment;
+                let child = node.children.get(segment);
+                if (!child) {
+                    child = createTreeNode(segment, path);
+                    node.children.set(segment, child);
+                }
+                child.keyCount++;
+                node = child;
+            }
+            node.key = key;
+        }
+        return root;
+    }
+
+    function createTreeNode(label, path) {
+        return {
+            label,
+            path,
+            key: null,
+            keyCount: 0,
+            children: new Map()
+        };
+    }
+
+    function sortedChildren(node) {
+        return Array.from(node.children.values()).sort((left, right) => {
+            const leftFolder = left.children.size > 0;
+            const rightFolder = right.children.size > 0;
+            if (leftFolder !== rightFolder) {
+                return leftFolder ? -1 : 1;
+            }
+            return left.label.localeCompare(right.label);
+        });
+    }
+
+    function isExpanded(node) {
+        if (node.children.size === 0) {
+            return false;
+        }
+        if (state.collapsedPaths.has(node.path)) {
+            return false;
+        }
+        if (state.expandedPaths.has(node.path)) {
+            return true;
+        }
+        if (state.currentKeys.length <= SMALL_KEYSET_EXPAND_LIMIT) {
+            return true;
+        }
+        return node.children.size <= DEFAULT_EXPANDED_CHILDREN;
+    }
+
+    function toggleNode(node) {
+        if (isExpanded(node)) {
+            state.collapsedPaths.add(node.path);
+            state.expandedPaths.delete(node.path);
+        } else {
+            state.expandedPaths.add(node.path);
+            state.collapsedPaths.delete(node.path);
+        }
+        renderTree();
+    }
+
+    function expandAncestors(key) {
+        if (!key) {
+            return false;
+        }
+        const segments = key.split(':');
+        let path = '';
+        let changed = false;
+        for (let i = 0; i < segments.length - 1; i++) {
+            path = i === 0 ? segments[i] : path + ':' + segments[i];
+            if (!state.expandedPaths.has(path) || state.collapsedPaths.has(path)) {
+                state.expandedPaths.add(path);
+                state.collapsedPaths.delete(path);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    function renderTree() {
+        const scrollTop = elements.keyList.scrollTop;
+        elements.keyList.textContent = '';
+        if (state.currentKeys.length === 0) {
+            return;
+        }
+        const root = buildKeyTree(state.currentKeys);
+        renderNodeChildren(elements.keyList, root);
+        elements.keyList.scrollTop = scrollTop;
+        highlightSelectedKey();
+    }
+
+    function renderNodeChildren(container, node) {
+        for (const child of sortedChildren(node)) {
+            const hasChildren = child.children.size > 0;
+            const expanded = hasChildren && isExpanded(child);
+            const row = document.createElement('div');
+            row.className = 'key-row';
+            row.dataset.path = child.path;
+            row.setAttribute('role', 'treeitem');
+            if (hasChildren) {
+                row.setAttribute('aria-expanded', String(expanded));
+            }
+            if (child.key) {
+                row.dataset.key = child.key;
+                row.setAttribute('aria-selected', String(child.key === state.selectedKey));
+            }
+
+            if (hasChildren) {
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'key-toggle';
+                toggle.textContent = expanded ? '▾' : '▸';
+                toggle.title = expanded ? '折叠' : '展开';
+                toggle.setAttribute('aria-label', (expanded ? '折叠 ' : '展开 ') + child.path);
+                toggle.setAttribute('aria-expanded', String(expanded));
+                toggle.addEventListener('click', event => {
+                    event.stopPropagation();
+                    toggleNode(child);
+                });
+                row.appendChild(toggle);
+            } else {
+                const spacer = document.createElement('span');
+                spacer.className = 'key-toggle-placeholder';
+                spacer.setAttribute('aria-hidden', 'true');
+                row.appendChild(spacer);
+            }
+
+            const label = document.createElement('button');
+            label.type = 'button';
+            label.className = 'key-label mono' + (hasChildren ? ' key-folder-label' : '');
+            label.textContent = child.label || '(空)';
+            label.title = child.key || child.path;
+            if (child.key) {
+                label.addEventListener('click', () => selectKey(child.key));
+                if (child.key === state.selectedKey) {
+                    row.classList.add('active');
+                }
+            } else {
+                label.setAttribute('aria-label', (expanded ? '折叠 ' : '展开 ') + child.path);
+                label.addEventListener('click', () => toggleNode(child));
+            }
+            row.appendChild(label);
+
+            if (hasChildren) {
+                const count = document.createElement('span');
+                count.className = 'key-count-hint';
+                count.textContent = child.keyCount;
+                count.title = child.keyCount + ' 个 key';
+                row.appendChild(count);
+            }
+
+            container.appendChild(row);
+
+            if (hasChildren && expanded) {
+                const group = document.createElement('div');
+                group.className = 'key-children';
+                group.setAttribute('role', 'group');
+                renderNodeChildren(group, child);
+                container.appendChild(group);
+            }
         }
     }
 
@@ -274,7 +468,12 @@
 
     async function selectKey(name) {
         state.selectedKey = name;
-        highlightSelectedKey();
+        const expanded = expandAncestors(name);
+        if (expanded && state.currentKeys.length > 0) {
+            renderTree();
+        } else {
+            highlightSelectedKey();
+        }
         updateKeyHash(name);
         try {
             const data = await request('/api/key?name=' + encodeURIComponent(name));
@@ -294,7 +493,9 @@
                 elements.detailValue.textContent = data.value;
             }
             elements.keyDetail.classList.remove('hidden');
+            elements.detailEmpty.classList.add('hidden');
             elements.deleteKey.disabled = false;
+            setMainTab('detail');
         } catch (error) {
             clearKeyDetail();
             appendSystem('读取 key 失败：' + (error.message || 'unknown error'), true);
@@ -327,8 +528,12 @@
     }
 
     function highlightSelectedKey() {
-        for (const item of elements.keyList.querySelectorAll('.key-item')) {
-            item.classList.toggle('active', item.dataset.key === state.selectedKey);
+        for (const row of elements.keyList.querySelectorAll('.key-row')) {
+            const active = Boolean(row.dataset.key) && row.dataset.key === state.selectedKey;
+            row.classList.toggle('active', active);
+            if (row.dataset.key) {
+                row.setAttribute('aria-selected', String(active));
+            }
         }
     }
 
@@ -346,6 +551,7 @@
             window.history.replaceState(null, '', window.location.pathname + window.location.search);
         }
         elements.keyDetail.classList.add('hidden');
+        elements.detailEmpty.classList.remove('hidden');
         elements.detailName.textContent = '';
         elements.detailType.textContent = '';
         elements.detailType.dataset.type = '';
@@ -353,6 +559,7 @@
         elements.copyValue.disabled = true;
         elements.copyValue.textContent = '复制';
         elements.deleteKey.disabled = false;
+        highlightSelectedKey();
     }
 
     function setConnection(connected, text) {
@@ -464,6 +671,7 @@
     }
 
     function clearConsole() {
+        setMainTab('console');
         elements.consoleOutput.textContent = '';
         const hint = document.createElement('div');
         hint.className = 'console-line console-hint';

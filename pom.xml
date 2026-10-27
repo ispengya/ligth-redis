@@ -25,10 +25,12 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <remoting.version>1.0.0-SNAPSHOT</remoting.version>
+        <file.storage.version>1.0-SNAPSHOT</file.storage.version>
         <picocli.version>4.7.5</picocli.version>
         <netty.version>4.1.100.Final</netty.version>
         <slf4j.version>1.7.36</slf4j.version>
         <logback.version>1.2.11</logback.version>
+        <junit.version>4.13.2</junit.version>
 
         <maven-compiler-plugin.version>3.11.0</maven-compiler-plugin.version>
         <exec-maven-plugin.version>3.1.0</exec-maven-plugin.version>
@@ -40,6 +42,11 @@
                 <groupId>com.ispengya.remoting</groupId>
                 <artifactId>remoting-core</artifactId>
                 <version>${remoting.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ispengya</groupId>
+                <artifactId>file-storage</artifactId>
+                <version>${file.storage.version}</version>
             </dependency>
             <dependency>
                 <groupId>info.picocli</groupId>
@@ -60,6 +67,12 @@
                 <groupId>ch.qos.logback</groupId>
                 <artifactId>logback-classic</artifactId>
                 <version>${logback.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>junit</groupId>
+                <artifactId>junit</artifactId>
+                <version>${junit.version}</version>
+                <scope>test</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
