@@ -17,7 +17,7 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.ispengya.remoting</groupId>
+            <groupId>${remoting.groupId}</groupId>
             <artifactId>remoting-core</artifactId>
         </dependency>
     </dependencies>

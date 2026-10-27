@@ -24,7 +24,8 @@
         <maven.compiler.target>8</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <remoting.version>1.0.0-SNAPSHOT</remoting.version>
+        <remoting.groupId>io.github.ispengya</remoting.groupId>
+        <remoting.version>0.1.0</remoting.version>
         <file.storage.groupId>io.github.ispengya</file.storage.groupId>
         <file.storage.version>0.1.0</file.storage.version>
         <picocli.version>4.7.5</picocli.version>
@@ -40,7 +41,7 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>com.ispengya.remoting</groupId>
+                <groupId>${remoting.groupId}</groupId>
                 <artifactId>remoting-core</artifactId>
                 <version>${remoting.version}</version>
             </dependency>
