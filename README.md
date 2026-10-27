@@ -55,10 +55,7 @@ light-redis-panel    -> light-redis-client + picocli
 - 已安装并 `mvn install` 过自研项目 `netty-remoting-framework`
   - 路径示例：`d:\workspace\netty-remoting-framework`
   - 在该项目根目录执行一次：`mvn install -DskipTests`
-- 已安装并 `mvn install` 过自研文件存储 SDK `mini-file-storage`
-  - 路径示例：`d:\github\mini-file-storage`
-  - 在该项目根目录执行一次：`mvn install -DskipTests`
-  - light-redis 通过 `com.ispengya:file-storage:1.0-SNAPSHOT` 引入
+- 文件存储 SDK 从 Maven Central 获取：`io.github.ispengya:file-storage:0.1.0`
 - 推荐在 Windows 下使用 WSL 或 Git Bash 运行 `server.sh` / `cli.sh` / `panel.sh`，也可以在 IDE 中直接运行 main 方法。
 
 ## 构建

@@ -25,7 +25,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <remoting.version>1.0.0-SNAPSHOT</remoting.version>
-        <file.storage.version>1.0-SNAPSHOT</file.storage.version>
+        <file.storage.groupId>io.github.ispengya</file.storage.groupId>
+        <file.storage.version>0.1.0</file.storage.version>
         <picocli.version>4.7.5</picocli.version>
         <netty.version>4.1.100.Final</netty.version>
         <slf4j.version>1.7.36</slf4j.version>
@@ -44,7 +45,7 @@
                 <version>${remoting.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.ispengya</groupId>
+                <groupId>${file.storage.groupId}</groupId>
                 <artifactId>file-storage</artifactId>
                 <version>${file.storage.version}</version>
             </dependency>

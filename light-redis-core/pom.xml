@@ -21,7 +21,7 @@
             <artifactId>remoting-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.ispengya</groupId>
+            <groupId>${file.storage.groupId}</groupId>
             <artifactId>file-storage</artifactId>
         </dependency>
         <dependency>
