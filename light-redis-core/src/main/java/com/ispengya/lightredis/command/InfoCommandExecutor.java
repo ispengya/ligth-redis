@@ -35,6 +35,7 @@ public class InfoCommandExecutor implements CommandExecutor {
         append(result, "total_commands_processed", stats.getCommandCount());
         append(result, "connected_clients", stats.getConnectedClients());
         append(result, "keys", store.size());
+        append(result, "expired_keys", store.getExpiredCount());
         append(result, "jvm_used_memory_mb", stats.getUsedMemoryMb());
         append(result, "jvm_threads", stats.getJvmThreads());
         return result.toString();

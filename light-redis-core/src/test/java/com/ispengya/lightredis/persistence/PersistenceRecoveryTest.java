@@ -99,6 +99,48 @@ public class PersistenceRecoveryTest {
         assertEquals(2L, commandLog.getRecoveredCommands());
     }
 
+    @Test
+    public void keepsAbsoluteTtlAcrossRestart() {
+        assertEquals("OK", execute("SET key value"));
+        assertEquals("1", execute("EXPIRE key 60"));
+        long ttlBefore = Long.parseLong(execute("PTTL key"));
+        assertTrue(ttlBefore > 0L);
+
+        reopen();
+
+        long ttlAfter = Long.parseLong(execute("PTTL key"));
+        assertTrue(ttlAfter > 0L);
+        assertTrue(ttlAfter <= ttlBefore);
+        assertEquals("value", execute("GET key"));
+    }
+
+    @Test
+    public void expiredKeyDoesNotSurviveRestart() {
+        assertEquals("OK", execute("SET gone value"));
+        assertEquals("OK", execute("SET keep value"));
+        assertEquals("1", execute("PEXPIREAT gone "
+                + (System.currentTimeMillis() + 100L)));
+        sleep(250L);
+
+        reopen();
+
+        assertEquals("0", execute("EXISTS gone"));
+        assertEquals("value", execute("GET keep"));
+        assertEquals("1", execute("DBSIZE"));
+    }
+
+    @Test
+    public void setAfterExpireClearsTtlAcrossRestart() {
+        assertEquals("OK", execute("SET key value"));
+        assertEquals("1", execute("EXPIRE key 60"));
+        assertEquals("OK", execute("SET key value2"));
+
+        reopen();
+
+        assertEquals("-1", execute("TTL key"));
+        assertEquals("value2", execute("GET key"));
+    }
+
     private void openNewService() {
         CommandDispatcher dispatcher = newDispatcher();
         commandLog = FileCommandLog.open(new PersistenceConfig(dataDir.toString(), true), dispatcher);
@@ -119,6 +161,15 @@ public class PersistenceRecoveryTest {
     private String execute(String text) {
         Command command = CommandParser.parse(text);
         return commandService.execute(command);
+    }
+
+    private void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(e);
+        }
     }
 
     private static void deleteRecursively(Path root) throws IOException {

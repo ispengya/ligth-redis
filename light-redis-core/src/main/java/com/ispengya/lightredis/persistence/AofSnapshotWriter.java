@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -76,6 +77,7 @@ final class AofSnapshotWriter {
             if (value == null || value.isEmpty()) {
                 continue;
             }
+            Long expireAt = source.getExpireAt(key);
             switch (value.getType()) {
                 case STRING:
                     writeString(key, (StringValue) value);
@@ -94,6 +96,9 @@ final class AofSnapshotWriter {
                     break;
                 default:
                     throw new PersistenceException("Unsupported value type: " + value.getType());
+            }
+            if (expireAt != null) {
+                writeRecord("PEXPIREAT", Arrays.asList(key, Long.toString(expireAt)));
             }
         }
         log.info("AOF snapshot generated: keys={}, records={}", keys.size(), recordsWritten);

@@ -90,6 +90,7 @@ public class AofRewriteTest {
         for (int i = 0; i < 200; i++) {
             assertEquals("OK", execute("SET during:" + i + " during-" + i));
         }
+        assertEquals("1", execute("EXPIRE during:199 60"));
         assertTrue(commandLog.awaitRewriteCompletion(15000L));
         assertTrue(commandLog.isLastRewriteSucceeded());
 
@@ -97,6 +98,7 @@ public class AofRewriteTest {
         open(config);
         assertEquals("seed-799", executeRead("GET seed:799"));
         assertEquals("during-199", executeRead("GET during:199"));
+        assertTrue(Long.parseLong(executeRead("PTTL during:199")) > 0L);
         assertEquals("1000", executeRead("DBSIZE"));
     }
 
@@ -117,6 +119,49 @@ public class AofRewriteTest {
         assertEquals("v1", executeRead("GET first"));
         assertEquals("v2", executeRead("GET second"));
         assertEquals("2", executeRead("DBSIZE"));
+    }
+
+    @Test
+    public void keepsTtlAfterConsecutiveRewrites() {
+        assertEquals("OK", execute("SET first v1"));
+        assertEquals("1", execute("EXPIRE first 60"));
+        assertTrue(commandLog.startRewrite());
+        assertTrue(commandLog.awaitRewriteCompletion(10000L));
+        assertTrue(commandLog.isLastRewriteSucceeded());
+
+        assertEquals("OK", execute("SET second v2"));
+        assertEquals("1", execute("EXPIRE second 60"));
+        assertTrue(commandLog.startRewrite());
+        assertTrue(commandLog.awaitRewriteCompletion(10000L));
+        assertTrue(commandLog.isLastRewriteSucceeded());
+
+        close();
+        open(config);
+        assertTrue(Long.parseLong(executeRead("PTTL first")) > 0L);
+        assertTrue(Long.parseLong(executeRead("PTTL second")) > 0L);
+        assertEquals("v1", executeRead("GET first"));
+        assertEquals("v2", executeRead("GET second"));
+    }
+
+    @Test
+    public void rewriteKeepsTtlAndDropsExpiredKeys() {
+        assertEquals("OK", execute("SET live value"));
+        assertEquals("1", execute("EXPIRE live 60"));
+        assertEquals("OK", execute("SET expired value"));
+        assertEquals("1", execute("PEXPIREAT expired "
+                + (System.currentTimeMillis() + 100L)));
+        sleep(250L);
+
+        assertTrue(commandLog.startRewrite());
+        assertTrue(commandLog.awaitRewriteCompletion(10000L));
+        assertTrue(commandLog.isLastRewriteSucceeded());
+
+        close();
+        open(config);
+        assertTrue(Long.parseLong(executeRead("PTTL live")) > 0L);
+        assertEquals("value", executeRead("GET live"));
+        assertEquals("0", executeRead("EXISTS expired"));
+        assertEquals("1", executeRead("DBSIZE"));
     }
 
     @Test

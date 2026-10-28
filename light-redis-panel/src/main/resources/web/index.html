@@ -122,6 +122,10 @@
                 <button type="button" class="quick-chip mono" data-command="INFO">INFO</button>
                 <button type="button" class="quick-chip mono" data-command="KEYS demo:*">KEYS demo:*</button>
                 <button type="button" class="quick-chip mono" data-command="DBSIZE">DBSIZE</button>
+                <button type="button" class="quick-chip mono"
+                        data-command="EXPIRE demo:string 60">EXPIRE demo:string 60</button>
+                <button type="button" class="quick-chip mono" data-command="TTL demo:string">TTL demo:string</button>
+                <button type="button" class="quick-chip mono" data-command="PERSIST demo:string">PERSIST demo:string</button>
             </div>
 
             <div class="quick-group">
@@ -196,6 +200,10 @@
                         <span class="meta-label">Type</span>
                         <span id="detail-type" class="type-badge">—</span>
                     </div>
+                    <div class="meta-row">
+                        <span class="meta-label">TTL</span>
+                        <span id="detail-ttl" class="ttl-value">—</span>
+                    </div>
                 </div>
                 <div class="value-head">
                     <span class="meta-label">Value</span>
@@ -238,6 +246,10 @@
             <div class="stat">
                 <span class="stat-label">Key 数量</span>
                 <span id="stat-keys" class="stat-value">—</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">过期删除</span>
+                <span id="stat-expired" class="stat-value">—</span>
             </div>
             <div class="stat">
                 <span class="stat-label">JVM 内存</span>

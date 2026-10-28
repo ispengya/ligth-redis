@@ -7,7 +7,8 @@ import com.ispengya.lightredis.protocol.Command;
 /**
  * 命令执行入口。
  *
- * <p>写命令先追加 AOF，追加成功后再修改内存；日志写入失败时命令不会执行。</p>
+ * <p>写命令先追加 AOF，追加成功后再修改内存；日志写入失败时命令不会执行。
+ * 相对过期时间命令会在追加前归一化为 PEXPIREAT，保证 AOF 回放可确定。</p>
  */
 public final class CommandService {
 
@@ -43,9 +44,14 @@ public final class CommandService {
      * @throws com.ispengya.lightredis.persistence.PersistenceException 写命令落盘失败
      */
     public String execute(Command command) {
-        if (dispatcher.isWrite(command.getName())) {
-            commandLog.append(command);
+        if (command == null) {
+            throw new IllegalArgumentException("Command must not be null");
         }
-        return dispatcher.dispatch(command);
+        Command effective = ExpireCommandNormalizer.normalize(
+                command, System.currentTimeMillis());
+        if (dispatcher.isWrite(effective.getName())) {
+            commandLog.append(effective);
+        }
+        return dispatcher.dispatch(effective);
     }
 }

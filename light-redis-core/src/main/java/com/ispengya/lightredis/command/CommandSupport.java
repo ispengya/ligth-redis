@@ -18,6 +18,11 @@ final class CommandSupport {
     static final String ERR_FLOAT = "ERR value is not a valid float";
 
     /**
+     * 过期时间参数非法时返回的错误。
+     */
+    static final String ERR_EXPIRE_TIME = "ERR invalid expire time";
+
+    /**
      * 不存在的值在文本协议中的表示。
      */
     static final String NIL = "(nil)";
@@ -47,6 +52,62 @@ final class CommandSupport {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /**
+     * 解析长整数参数。
+     *
+     * @param value 参数文本
+     * @return 解析结果，非法时返回 null
+     */
+    static Long parseLong(String value) {
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 把秒转换为毫秒，溢出时饱和到 long 边界。
+     *
+     * @param seconds 秒数
+     * @return 毫秒数
+     */
+    static long secondsToMillis(long seconds) {
+        return saturatingMultiply(seconds, 1000L);
+    }
+
+    /**
+     * 乘法，溢出时饱和到 long 边界。
+     *
+     * @param value 被乘数
+     * @param factor 乘数
+     * @return 乘积
+     */
+    static long saturatingMultiply(long value, long factor) {
+        if (value > Long.MAX_VALUE / factor) {
+            return Long.MAX_VALUE;
+        }
+        if (value < Long.MIN_VALUE / factor) {
+            return Long.MIN_VALUE;
+        }
+        return value * factor;
+    }
+
+    /**
+     * 加法，溢出时饱和到 long 边界。
+     *
+     * @param left 左操作数
+     * @param right 右操作数
+     * @return 和
+     */
+    static long saturatingAdd(long left, long right) {
+        long result = left + right;
+        if (((left ^ result) & (right ^ result)) < 0) {
+            return right > 0 ? Long.MAX_VALUE : Long.MIN_VALUE;
+        }
+        return result;
     }
 
     /**

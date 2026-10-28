@@ -155,6 +155,7 @@ public class PanelApiHandler implements HttpHandler {
             status.put("totalCommands", parseLong(values.get("total_commands_processed")));
             status.put("connectedClients", parseLong(values.get("connected_clients")));
             status.put("keys", parseLong(values.get("keys")));
+            status.put("expiredKeys", parseLong(values.get("expired_keys")));
             status.put("jvmUsedMemoryMb", parseDouble(values.get("jvm_used_memory_mb")));
             status.put("jvmThreads", parseLong(values.get("jvm_threads")));
 
@@ -258,6 +259,12 @@ public class PanelApiHandler implements HttpHandler {
             }
 
             String quotedName = quoteArgument(name);
+            Long ttl = null;
+            String ttlReply = client.execute("PTTL " + quotedName);
+            if (!isErrorReply(ttlReply)) {
+                ttl = parseLong(ttlReply);
+            }
+
             String value = null;
             String valueCommand = null;
             if ("string".equals(type)) {
@@ -284,6 +291,7 @@ public class PanelApiHandler implements HttpHandler {
             result.put("ok", true);
             result.put("key", name);
             result.put("type", type);
+            result.put("ttl", ttl);
             result.put("value", value);
             result.put("elapsedMs", elapsedMillis(start));
             writeJson(exchange, 200, result);

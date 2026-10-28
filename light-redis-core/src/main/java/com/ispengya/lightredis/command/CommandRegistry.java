@@ -37,6 +37,14 @@ public final class CommandRegistry {
         dispatcher.register("TYPE", new TypeCommandExecutor());
         dispatcher.register("DBSIZE", new DbsizeCommandExecutor());
 
+        dispatcher.register("EXPIRE", new ExpireCommandExecutor(), true);
+        dispatcher.register("PEXPIRE", new PexpireCommandExecutor(), true);
+        dispatcher.register("EXPIREAT", new ExpireatCommandExecutor(), true);
+        dispatcher.register("PEXPIREAT", new PexpireatCommandExecutor(), true);
+        dispatcher.register("TTL", new TtlCommandExecutor());
+        dispatcher.register("PTTL", new PttlCommandExecutor());
+        dispatcher.register("PERSIST", new PersistCommandExecutor(), true);
+
         dispatcher.register("LPUSH", new LpushCommandExecutor(), true);
         dispatcher.register("RPUSH", new RpushCommandExecutor(), true);
         dispatcher.register("LPOP", new LpopCommandExecutor(), true);

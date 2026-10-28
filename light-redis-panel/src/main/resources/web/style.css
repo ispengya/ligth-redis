@@ -722,6 +722,24 @@ select:focus-visible {
     color: var(--muted);
 }
 
+.ttl-value {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+}
+
+.ttl-value[data-state="active"] {
+    color: var(--text-soft);
+}
+
+.ttl-value[data-state="expiring"] {
+    color: var(--accent-strong);
+}
+
+.ttl-value[data-state="expired"] {
+    color: var(--red);
+}
+
 .value-head {
     display: flex;
     align-items: center;

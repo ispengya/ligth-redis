@@ -9,6 +9,7 @@
     const CONSOLE_HINT = '输入命令后按 Enter 执行，点击上方快捷命令可填入，↑/↓ 查看历史，Ctrl+L 清屏。支持引号：SET k "hello world"。';
     const KEY_MUTATING_COMMANDS = new Set([
         'SET', 'DEL',
+        'EXPIRE', 'PEXPIRE', 'EXPIREAT', 'PEXPIREAT', 'PERSIST',
         'LPUSH', 'RPUSH', 'LPOP', 'RPOP', 'LSET', 'LREM',
         'HSET', 'HDEL',
         'SADD', 'SREM',
@@ -41,6 +42,7 @@
         keyDetail: document.getElementById('key-detail'),
         detailName: document.getElementById('detail-name'),
         detailType: document.getElementById('detail-type'),
+        detailTtl: document.getElementById('detail-ttl'),
         detailValue: document.getElementById('detail-value'),
         deleteKey: document.getElementById('delete-key'),
         copyValue: document.getElementById('copy-value'),
@@ -61,6 +63,7 @@
         statCommands: document.getElementById('stat-commands'),
         statClients: document.getElementById('stat-clients'),
         statKeys: document.getElementById('stat-keys'),
+        statExpired: document.getElementById('stat-expired'),
         statMemory: document.getElementById('stat-memory'),
         statThreads: document.getElementById('stat-threads')
     };
@@ -480,6 +483,7 @@
             elements.detailName.textContent = data.key || name;
             elements.detailType.textContent = data.type || 'unknown';
             elements.detailType.dataset.type = data.type || 'unknown';
+            renderTtl(data.ttl);
             state.selectedValue = data.value === null || data.value === undefined
                 ? null
                 : data.value;
@@ -555,11 +559,47 @@
         elements.detailName.textContent = '';
         elements.detailType.textContent = '';
         elements.detailType.dataset.type = '';
+        elements.detailTtl.textContent = '';
+        elements.detailTtl.dataset.state = '';
         elements.detailValue.textContent = '';
         elements.copyValue.disabled = true;
         elements.copyValue.textContent = '复制';
         elements.deleteKey.disabled = false;
         highlightSelectedKey();
+    }
+
+    function renderTtl(ttl) {
+        if (ttl === null || ttl === undefined) {
+            elements.detailTtl.textContent = '—';
+            elements.detailTtl.dataset.state = '';
+            return;
+        }
+        if (ttl === -2) {
+            elements.detailTtl.textContent = '已过期';
+            elements.detailTtl.dataset.state = 'expired';
+            return;
+        }
+        if (ttl === -1) {
+            elements.detailTtl.textContent = '永不过期';
+            elements.detailTtl.dataset.state = 'persistent';
+            return;
+        }
+        elements.detailTtl.textContent = '剩余 ' + formatDuration(ttl);
+        elements.detailTtl.dataset.state = ttl <= 60000 ? 'expiring' : 'active';
+    }
+
+    function formatDuration(milliseconds) {
+        const value = Math.max(0, Number(milliseconds) || 0);
+        if (value >= 3600000) {
+            return (value / 3600000).toFixed(1) + ' 小时';
+        }
+        if (value >= 60000) {
+            return (value / 60000).toFixed(1) + ' 分钟';
+        }
+        if (value >= 1000) {
+            return Math.round(value / 1000) + ' 秒';
+        }
+        return Math.round(value) + ' 毫秒';
     }
 
     function setConnection(connected, text) {
@@ -575,6 +615,7 @@
         elements.statCommands.textContent = formatNumber(status.totalCommands);
         elements.statClients.textContent = formatNumber(status.connectedClients);
         elements.statKeys.textContent = formatNumber(status.keys);
+        elements.statExpired.textContent = formatNumber(status.expiredKeys);
         elements.statMemory.textContent = status.jvmUsedMemoryMb == null
             ? '—'
             : Number(status.jvmUsedMemoryMb).toFixed(1) + ' MB';

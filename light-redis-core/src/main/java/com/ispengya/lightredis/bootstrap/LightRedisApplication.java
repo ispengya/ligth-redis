@@ -9,6 +9,7 @@ import com.ispengya.lightredis.persistence.CommandLog;
 import com.ispengya.lightredis.persistence.FileCommandLog;
 import com.ispengya.lightredis.persistence.NoopCommandLog;
 import com.ispengya.lightredis.persistence.PersistenceConfig;
+import com.ispengya.lightredis.store.ActiveExpireCycle;
 import com.ispengya.lightredis.store.InMemoryKeyValueStore;
 import com.ispengya.lightredis.store.KeyValueStore;
 import com.ispengya.remoting.RemotingServer;
@@ -17,8 +18,7 @@ import com.ispengya.remoting.netty.NettyRequestProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
@@ -70,13 +70,20 @@ public class LightRedisApplication {
         }
 
         CommandRegistry.registerPersistenceCommands(dispatcher, commandLog);
+        long expired = store.purgeAllExpired();
+        if (expired > 0) {
+            log.info("Purged {} expired keys after recovery", expired);
+        }
         CommandService commandService = new CommandService(dispatcher, commandLog);
-        ExecutorService executor = Executors.newSingleThreadExecutor(new ThreadFactory() {
-            @Override
-            public Thread newThread(Runnable r) {
-                return new Thread(r, "light-redis-command-executor");
-            }
-        });
+        ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1,
+                new ThreadFactory() {
+                    @Override
+                    public Thread newThread(Runnable r) {
+                        return new Thread(r, "light-redis-command-executor");
+                    }
+                });
+        executor.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
+        executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
         RemotingServer server = new NettyRemotingServer(DEFAULT_PORT);
         NettyRequestProcessor processor = new LightRedisRequestProcessor(commandService, stats);
         server.registerProcessor(REQUEST_CODE, processor, executor);
@@ -105,6 +112,7 @@ public class LightRedisApplication {
 
         try {
             server.start();
+            new ActiveExpireCycle(store).start(executor);
         } catch (RuntimeException e) {
             server.shutdown();
             executor.shutdownNow();

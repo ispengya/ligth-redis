@@ -10,6 +10,7 @@
 - 支持 String / List / Hash / Set / Sorted Set 五种数据类型
 - 支持基础数据结构命令，例如 `SET`、`GET`、`LPUSH`、`LRANGE`、`HSET`、`SADD`、`ZADD`
 - 支持 AOF 持久化与后台重写：写命令先写入 mini-file-storage，启动时通过自定义恢复索引回放
+- 支持 key 过期时间：惰性删除 + 定期抽样删除，TTL 通过 AOF 持久化
 - 支持服务端观测命令：`INFO`、`KEYS`、`TYPE`、`DBSIZE`
 - 提供本地 Web 控制台：命令控制台、键浏览、服务状态
 - 线程模型参考 Redis 6：IO 多线程 + 命令单线程执行
@@ -171,6 +172,20 @@ data/light-redis/
 
 旧 generation 当前不会自动清理；切换成功后新 generation 通过 `CURRENT` 生效。
 
+### 过期时间持久化
+
+- `EXPIRE` / `PEXPIRE` / `EXPIREAT` 在写入 AOF 前统一转换为绝对时间的 `PEXPIREAT`
+- 重写快照在数据命令之后补写 `PEXPIREAT`，已经过期的 key 不写入新 generation
+- 过期删除本身不写 `DEL`：回放时过去的 `PEXPIREAT` 会立即删除 key，启动后再全量清理一次
+- 与 Redis 的差异：AOF 中可能暂时保留已过期但尚未重写的数据；实现主从复制时需要补充过期删除传播
+
+### 过期与删除策略
+
+- 惰性删除：访问 `GET` / `EXISTS` / `TYPE` / `DEL` 时发现 key 已过期立即删除；`KEYS` 和 `DBSIZE` 会过滤过期 key
+- 定期删除：在命令单线程上每 100ms 抽样最多 20 个带 TTL 的 key，过期比例超过 25% 时在 1ms 预算内继续采样
+- 启动清理：AOF 回放完成后、服务启动前删除所有已过期 key
+- 写入语义：`SET` 会清除 TTL；`LPUSH` / `HSET` / `SADD` 等修改已有 key 的操作保留 TTL
+
 ### 方式二：IDE 直接运行
 
 在 IDE 中找到类：
@@ -251,7 +266,7 @@ hello
 
 键浏览按 key 中的 `:` 自动分层折叠，目录节点显示后代 key 数量；大分组默认折叠，小分组默认展开，可点击箭头逐层展开。
 
-中间区域提供「命令控制台 / 键详情」两个标签页。点击左侧 key 会自动切到键详情，切回控制台后命令输出和输入状态仍会保留。
+中间区域提供「命令控制台 / 键详情」两个标签页。点击左侧 key 会自动切到键详情，切回控制台后命令输出和输入状态仍会保留。键详情会显示 TTL 状态，通用快捷命令包含 `EXPIRE`、`TTL` 和 `PERSIST`。
 
 ### 启动
 
@@ -281,10 +296,10 @@ mvn -f light-redis-panel/pom.xml compile exec:java \
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/ping` | 执行 `PING`，检查服务端连接 |
-| GET | `/api/status` | 执行 `INFO` 并返回结构化状态 |
+| GET | `/api/status` | 执行 `INFO` 并返回结构化状态（含累计过期删除数） |
 | POST | `/api/command` | body 为原始命令文本，执行一条命令 |
 | GET | `/api/keys?pattern=*` | 执行 `KEYS` 并返回 key 列表 |
-| GET | `/api/key?name=...` | 返回单个 key 的类型和值 |
+| GET | `/api/key?name=...` | 返回单个 key 的类型、TTL 和值 |
 | DELETE | `/api/key?name=...` | 删除单个 key |
 
 `POST` 和 `DELETE` 需要携带请求头 `X-Light-Redis-Panel: 1`，用于防止浏览器跨站调用。curl 示例：
@@ -326,8 +341,12 @@ curl -s -X DELETE \
 - `EXISTS key` → 存在返回 `1`，不存在返回 `0`
 - `TYPE key` → 返回 `string`、`list`、`hash`、`set`、`zset` 或 `none`
 - `KEYS pattern` → 按 glob 模式返回 key，换行分隔；支持 `*` 和 `?`
-- `DBSIZE` → 返回 key 总数
-- `INFO` → 返回运行时长、命令总数、活跃连接数、key 数量、JVM 内存和线程数（逐行 `key:value`）
+- `DBSIZE` → 返回 key 总数，不包含已过期 key
+- `EXPIRE key seconds` / `PEXPIRE key millis` → 设置相对过期时间；key 不存在返回 `0`，非正数立即删除 key
+- `EXPIREAT key unix-seconds` / `PEXPIREAT key unix-millis` → 设置绝对过期时间
+- `TTL key` / `PTTL key` → 返回剩余秒数或毫秒数；`-2` 表示 key 不存在，`-1` 表示没有过期时间
+- `PERSIST key` → 移除过期时间，成功返回 `1`
+- `INFO` → 返回运行时长、命令总数、活跃连接数、key 数量、过期删除数、JVM 内存和线程数（逐行 `key:value`）
 - `BGREWRITEAOF` → 启动后台 AOF 重写；已有重写任务时返回错误
 
 ### String
@@ -412,8 +431,8 @@ curl -s -X DELETE \
   - 从简单文本协议演进到 RESP 协议
 - 存储层：
   - 增加集合运算、`MGET` / `MSET`、`SCAN`、`ZREVRANGE` 等命令
-- 过期与 TTL：
-  - `EXPIRE` / `TTL`，惰性删除 + 定期扫描
+- 过期增强：
+  - `SET EX/PX/KEEPTTL`、`GETEX`、过期删除传播（为复制做准备）
 - 持久化：
   - 旧 generation 自动清理
   - 简化版 RDB 快照
