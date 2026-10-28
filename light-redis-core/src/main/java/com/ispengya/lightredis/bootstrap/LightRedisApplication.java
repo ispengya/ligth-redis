@@ -69,6 +69,7 @@ public class LightRedisApplication {
             log.info("AOF is disabled");
         }
 
+        CommandRegistry.registerPersistenceCommands(dispatcher, commandLog);
         CommandService commandService = new CommandService(dispatcher, commandLog);
         ExecutorService executor = Executors.newSingleThreadExecutor(new ThreadFactory() {
             @Override

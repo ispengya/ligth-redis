@@ -25,6 +25,20 @@ public interface CommandLog extends AutoCloseable {
     void flush();
 
     /**
+     * 启动一次后台 AOF 重写。
+     *
+     * @return 已启动返回 true；已有重写或持久化关闭时返回 false
+     */
+    boolean startRewrite();
+
+    /**
+     * 判断当前是否有重写任务。
+     *
+     * @return 重写进行中返回 true
+     */
+    boolean isRewriteInProgress();
+
+    /**
      * 刷盘并关闭日志。
      */
     @Override

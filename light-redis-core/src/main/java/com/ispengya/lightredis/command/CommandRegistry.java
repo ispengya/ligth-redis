@@ -1,6 +1,7 @@
 package com.ispengya.lightredis.command;
 
 import com.ispengya.lightredis.metrics.ServerStats;
+import com.ispengya.lightredis.persistence.CommandLog;
 
 /**
  * light-redis 命令注册表。
@@ -67,5 +68,21 @@ public final class CommandRegistry {
         dispatcher.register("ZCARD", new ZcardCommandExecutor());
         dispatcher.register("ZRANGE", new ZrangeCommandExecutor());
         dispatcher.register("ZRANK", new ZrankCommandExecutor());
+    }
+
+    /**
+     * 注册持久化管理命令。
+     *
+     * @param dispatcher 命令分发器
+     * @param commandLog 命令日志
+     */
+    public static void registerPersistenceCommands(CommandDispatcher dispatcher, CommandLog commandLog) {
+        if (dispatcher == null) {
+            throw new IllegalArgumentException("Dispatcher must not be null");
+        }
+        if (commandLog == null) {
+            throw new IllegalArgumentException("Command log must not be null");
+        }
+        dispatcher.register("BGREWRITEAOF", new BgRewriteAofCommandExecutor(commandLog));
     }
 }

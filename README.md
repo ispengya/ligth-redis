@@ -9,7 +9,7 @@
 - 简化文本协议（后续可以替换为 RESP）
 - 支持 String / List / Hash / Set / Sorted Set 五种数据类型
 - 支持基础数据结构命令，例如 `SET`、`GET`、`LPUSH`、`LRANGE`、`HSET`、`SADD`、`ZADD`
-- 支持 AOF 持久化：写命令先写入 mini-file-storage，启动时通过自定义恢复索引回放
+- 支持 AOF 持久化与后台重写：写命令先写入 mini-file-storage，启动时通过自定义恢复索引回放
 - 支持服务端观测命令：`INFO`、`KEYS`、`TYPE`、`DBSIZE`
 - 提供本地 Web 控制台：命令控制台、键浏览、服务状态
 - 线程模型参考 Redis 6：IO 多线程 + 命令单线程执行
@@ -122,19 +122,54 @@ mvn -q -f light-redis-core/pom.xml compile exec:java \
 - AOF 关闭时写命令直接执行，不创建数据目录
 - 每条命令默认 `syncFlush=true`，返回客户端前会强制刷盘
 - 因为先写日志后执行，语法或类型错误的写命令也会进入日志，恢复时记录警告并跳过
-- 当前没有 AOF rewrite / 日志压缩，日志会持续增长
 - 内置 ConsumeQueue 和 KeyIndex 未启用，只使用自定义恢复索引
 - `store.properties` 会固定 CommitLog 分段大小和单条记录上限，修改这些配置需要迁移数据目录
 
-磁盘目录结构由 mini-file-storage 生成：
+### AOF 重写
+
+支持手动触发后台重写：
+
+```text
+BGREWRITEAOF
+```
+
+重写流程：
+
+1. 在命令线程边界记录旧 AOF 逻辑末尾位点
+2. 后台从旧 AOF 前缀回放到临时内存 store
+3. 按当前状态生成紧凑命令：`SET`、`RPUSH`、`HSET`、`SADD`、`ZADD`
+4. 重写期间的写命令继续写旧 AOF，同时记录到 delta 队列
+5. 快照写完后把 delta 追加到新 AOF
+6. 短暂停止写入，原子切换 `CURRENT`，然后恢复写入
+
+自动触发默认策略：
+
+```text
+逻辑日志 >= 16MB
+且达到上次重写后日志大小的 2 倍
+每 1 秒检查一次
+```
+
+逻辑大小来自 CommitLog 合法末尾位点，不使用预分配的文件大小。
+
+目录结构：
 
 ```text
 data/light-redis/
-├── data/                 # CommitLog 分段文件
-├── store.properties      # 磁盘格式和尺寸元数据
-├── checkpoint.properties # 刷盘水位
-└── .store.lock           # 进程独占锁
+├── CURRENT                       # 当前 generation 指针
+├── data/                         # 首次启动时的初始 generation（兼容旧布局）
+├── store.properties
+├── checkpoint.properties
+├── .store.lock
+└── generations/
+    └── gen-<timestamp>-<seq>/    # 重写后的 generation
+        ├── data/
+        ├── store.properties
+        ├── checkpoint.properties
+        └── .store.lock
 ```
+
+旧 generation 当前不会自动清理；切换成功后新 generation 通过 `CURRENT` 生效。
 
 ### 方式二：IDE 直接运行
 
@@ -293,6 +328,7 @@ curl -s -X DELETE \
 - `KEYS pattern` → 按 glob 模式返回 key，换行分隔；支持 `*` 和 `?`
 - `DBSIZE` → 返回 key 总数
 - `INFO` → 返回运行时长、命令总数、活跃连接数、key 数量、JVM 内存和线程数（逐行 `key:value`）
+- `BGREWRITEAOF` → 启动后台 AOF 重写；已有重写任务时返回错误
 
 ### String
 
@@ -379,7 +415,7 @@ curl -s -X DELETE \
 - 过期与 TTL：
   - `EXPIRE` / `TTL`，惰性删除 + 定期扫描
 - 持久化：
-  - AOF rewrite / 日志压缩
+  - 旧 generation 自动清理
   - 简化版 RDB 快照
 - 发布订阅：
   - `PUBLISH` / `SUBSCRIBE` 等

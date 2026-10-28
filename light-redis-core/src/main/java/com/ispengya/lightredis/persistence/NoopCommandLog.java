@@ -26,6 +26,16 @@ public final class NoopCommandLog implements CommandLog {
     }
 
     @Override
+    public boolean startRewrite() {
+        return false;
+    }
+
+    @Override
+    public boolean isRewriteInProgress() {
+        return false;
+    }
+
+    @Override
     public void close() {
         // 持久化关闭时不做任何事
     }
