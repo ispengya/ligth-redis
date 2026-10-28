@@ -107,6 +107,8 @@
                             aria-selected="true" aria-controls="console-view">命令控制台</button>
                     <button id="tab-detail" class="main-tab" type="button" role="tab"
                             aria-selected="false" aria-controls="detail-view">键详情</button>
+                    <button id="tab-subscribe" class="main-tab" type="button" role="tab"
+                            aria-selected="false" aria-controls="subscribe-view">订阅</button>
                 </div>
             </div>
             <button id="clear-console" class="btn btn-ghost btn-sm" type="button">清屏</button>
@@ -126,6 +128,16 @@
                         data-command="EXPIRE demo:string 60">EXPIRE demo:string 60</button>
                 <button type="button" class="quick-chip mono" data-command="TTL demo:string">TTL demo:string</button>
                 <button type="button" class="quick-chip mono" data-command="PERSIST demo:string">PERSIST demo:string</button>
+            </div>
+
+            <div class="quick-group">
+                <span class="quick-group-label">Pub/Sub</span>
+                <button type="button" class="quick-chip mono"
+                        data-command="PUBLISH demo:channel hello">PUBLISH demo:channel hello</button>
+                <button type="button" class="quick-chip mono"
+                        data-command="PUBSUB CHANNELS">PUBSUB CHANNELS</button>
+                <button type="button" class="quick-chip mono"
+                        data-command="PUBSUB NUMPAT">PUBSUB NUMPAT</button>
             </div>
 
             <div class="quick-group">
@@ -210,6 +222,19 @@
                     <button id="copy-value" class="btn btn-ghost btn-xs" type="button">复制</button>
                 </div>
                 <pre id="detail-value" class="mono value-box"></pre>
+            </div>
+        </div>
+
+        <div id="subscribe-view" class="tab-view subscribe-view hidden" role="tabpanel"
+             aria-labelledby="tab-subscribe">
+            <div class="subscribe-toolbar">
+                <input id="subscribe-channel" class="input mono" type="text" value="demo:channel"
+                       spellcheck="false" aria-label="订阅频道" placeholder="频道名">
+                <button id="subscribe-toggle" class="btn btn-primary btn-sm" type="button">订阅</button>
+                <span id="subscribe-status" class="muted">未订阅</span>
+            </div>
+            <div id="subscribe-output" class="subscribe-output" aria-live="polite">
+                <p class="empty">输入频道后点击订阅，或在控制台 PUBLISH 一条消息</p>
             </div>
         </div>
     </section>

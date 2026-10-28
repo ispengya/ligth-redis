@@ -1,6 +1,7 @@
 package com.ispengya.lightredis.command;
 
 import com.ispengya.lightredis.protocol.Command;
+import com.ispengya.lightredis.protocol.GlobPattern;
 import com.ispengya.lightredis.store.KeyValueStore;
 
 import java.util.ArrayList;
@@ -21,7 +22,7 @@ public class KeysCommandExecutor implements CommandExecutor {
         if (args.size() != 1) {
             return "ERR wrong number of arguments for KEYS";
         }
-        Pattern pattern = globToRegex(args.get(0));
+        Pattern pattern = GlobPattern.compile(args.get(0));
         List<String> matched = new ArrayList<>();
         for (String key : store.keys()) {
             if (pattern.matcher(key).matches()) {
@@ -30,32 +31,5 @@ public class KeysCommandExecutor implements CommandExecutor {
         }
         Collections.sort(matched);
         return String.join("\n", matched);
-    }
-
-    private Pattern globToRegex(String glob) {
-        StringBuilder regex = new StringBuilder("^");
-        for (int i = 0; i < glob.length(); i++) {
-            char current = glob.charAt(i);
-            switch (current) {
-                case '*':
-                    regex.append(".*");
-                    break;
-                case '?':
-                    regex.append('.');
-                    break;
-                case '\\':
-                    if (i + 1 < glob.length()) {
-                        regex.append(Pattern.quote(String.valueOf(glob.charAt(++i))));
-                    } else {
-                        regex.append("\\\\");
-                    }
-                    break;
-                default:
-                    regex.append(Pattern.quote(String.valueOf(current)));
-                    break;
-            }
-        }
-        regex.append('$');
-        return Pattern.compile(regex.toString());
     }
 }

@@ -41,7 +41,8 @@ public class LightRedisPanelApplication implements Runnable {
         PanelServer server;
         try {
             client.start();
-            server = new PanelServer(client, redisHost + ":" + redisPort, httpPort);
+            server = new PanelServer(client, redisHost + ":" + redisPort, httpPort,
+                    () -> new RemotingLightRedisClient(redisHost, redisPort, timeoutMillis));
             server.start();
         } catch (Exception e) {
             System.err.println("Failed to start light-redis panel: " + e.getMessage());

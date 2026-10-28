@@ -32,6 +32,13 @@ public interface LightRedisClient extends AutoCloseable {
     CompletableFuture<String> executeAsync(String command);
 
     /**
+     * 设置发布订阅消息监听器。
+     *
+     * @param listener 监听器，null 表示丢弃后续推送
+     */
+    void setPubSubListener(PubSubListener listener);
+
+    /**
      * 关闭客户端并释放底层资源。
      */
     @Override

@@ -11,6 +11,7 @@
 - 支持基础数据结构命令，例如 `SET`、`GET`、`LPUSH`、`LRANGE`、`HSET`、`SADD`、`ZADD`
 - 支持 AOF 持久化与后台重写：写命令先写入 mini-file-storage，启动时通过自定义恢复索引回放
 - 支持 key 过期时间：惰性删除 + 定期抽样删除，TTL 通过 AOF 持久化
+- 支持发布订阅：频道/模式订阅、`PUBLISH`、`PUBSUB` 查询，面板支持 SSE 实时消息
 - 支持服务端观测命令：`INFO`、`KEYS`、`TYPE`、`DBSIZE`
 - 提供本地 Web 控制台：命令控制台、键浏览、服务状态
 - 线程模型参考 Redis 6：IO 多线程 + 命令单线程执行
@@ -44,16 +45,16 @@ light-redis-panel    -> light-redis-client + picocli
 
 各模块职责：
 
-- `light-redis-core`：`bootstrap`、`network`、`protocol`、`command`、`store`、`persistence`、`metrics`
-- `light-redis-client`：同步/异步命令调用、连接管理，CLI 与面板共用
+- `light-redis-core`：`bootstrap`、`network`、`protocol`、`command`、`store`、`persistence`、`pubsub`、`metrics`
+- `light-redis-client`：同步/异步命令调用、连接管理、发布订阅消息监听，CLI 与面板共用
 - `light-redis-cli`：基于 picocli 的交互式命令行客户端
-- `light-redis-panel`：JDK HttpServer API、静态资源、前端页面
+- `light-redis-panel`：JDK HttpServer API、SSE 订阅、静态资源、前端页面
 
 ## 环境要求
 
 - JDK 8+
 - Maven 3+
-- 通信层从 Maven Central 获取：`io.github.ispengya:remoting-core:0.1.0`
+- 通信层从 Maven Central 获取：`io.github.ispengya:remoting-core:0.2.0`
 - 文件存储 SDK 从 Maven Central 获取：`io.github.ispengya:file-storage:0.1.0`
 - 推荐在 Windows 下使用 WSL 或 Git Bash 运行 `server.sh` / `cli.sh` / `panel.sh`，也可以在 IDE 中直接运行 main 方法。
 
@@ -258,15 +259,38 @@ hello
 127.0.0.1:6379> quit
 ```
 
+订阅消息会在当前连接上异步打印，不需要额外轮询：
+
+```text
+127.0.0.1:6379> SUBSCRIBE news
+subscribed news
+[news] hello
+
+127.0.0.1:6379> PSUBSCRIBE news.*
+psubscribed news.*
+[pattern:news.*] news.tech hello
+```
+
+另一个客户端执行：
+
+```text
+PUBLISH news hello
+1
+```
+
+CLI 不进入严格订阅模式，订阅之后仍然可以继续发送普通命令。
+
 ## 本地 Web 控制台（Panel）
 
-面板是独立进程，通过客户端核心连接 light-redis，提供命令控制台、键浏览和服务状态。
+面板是独立进程，通过客户端核心连接 light-redis，提供命令控制台、键浏览、订阅和服务状态。
 
-命令控制台顶部按通用、String、List、Hash、Set、ZSet 分组提供快捷命令，点击填入输入框后按 Enter 执行；写命令完成后会自动刷新 key 列表。
+命令控制台顶部按通用、Pub/Sub、String、List、Hash、Set、ZSet 分组提供快捷命令，点击填入输入框后按 Enter 执行；写命令完成后会自动刷新 key 列表。
 
 键浏览按 key 中的 `:` 自动分层折叠，目录节点显示后代 key 数量；大分组默认折叠，小分组默认展开，可点击箭头逐层展开。
 
-中间区域提供「命令控制台 / 键详情」两个标签页。点击左侧 key 会自动切到键详情，切回控制台后命令输出和输入状态仍会保留。键详情会显示 TTL 状态，通用快捷命令包含 `EXPIRE`、`TTL` 和 `PERSIST`。
+中间区域提供「命令控制台 / 键详情 / 订阅」三个标签页。点击左侧 key 会自动切到键详情，切回控制台后命令输出和输入状态仍会保留。键详情会显示 TTL 状态，通用快捷命令包含 `EXPIRE`、`TTL` 和 `PERSIST`。
+
+订阅标签页通过 SSE 建立独立连接，输入频道后点击订阅即可实时接收 `PUBLISH` 消息；订阅连接和普通 API 请求互不影响。
 
 ### 启动
 
@@ -301,8 +325,9 @@ mvn -f light-redis-panel/pom.xml compile exec:java \
 | GET | `/api/keys?pattern=*` | 执行 `KEYS` 并返回 key 列表 |
 | GET | `/api/key?name=...` | 返回单个 key 的类型、TTL 和值 |
 | DELETE | `/api/key?name=...` | 删除单个 key |
+| GET | `/api/subscribe?channel=...` | SSE 订阅频道；也支持 `?pattern=...` 模式订阅 |
 
-`POST` 和 `DELETE` 需要携带请求头 `X-Light-Redis-Panel: 1`，用于防止浏览器跨站调用。curl 示例：
+`POST` 和 `DELETE` 需要携带请求头 `X-Light-Redis-Panel: 1`，用于防止浏览器跨站调用。`/api/subscribe` 是长连接 SSE 流，校验 `Host` 和可选的 `Origin`。curl 示例：
 
 ```bash
 curl -s http://127.0.0.1:8080/api/status
@@ -319,6 +344,8 @@ curl -s 'http://127.0.0.1:8080/api/key?name=panel:key'
 curl -s -X DELETE \
   -H 'X-Light-Redis-Panel: 1' \
   'http://127.0.0.1:8080/api/key?name=panel:key'
+
+curl -N 'http://127.0.0.1:8080/api/subscribe?channel=news'
 ```
 
 ### 安全说明
@@ -393,6 +420,25 @@ curl -s -X DELETE \
 - `ZRANGE key start stop [WITHSCORES]` → 按分值升序返回成员；使用 `WITHSCORES` 时每行格式为 `member score`
 - `ZRANK key member` → 返回从 0 开始的名次
 
+### 发布订阅
+
+- `SUBSCRIBE channel [channel ...]` → 订阅一个或多个频道
+- `UNSUBSCRIBE [channel ...]` → 取消订阅；不带参数时取消全部频道
+- `PSUBSCRIBE pattern [pattern ...]` → 按 glob 模式订阅，支持 `*` 和 `?`
+- `PUNSUBSCRIBE [pattern ...]` → 取消模式订阅；不带参数时取消全部模式
+- `PUBLISH channel message` → 返回收到消息的订阅数量
+- `PUBSUB CHANNELS [pattern]` → 返回当前有订阅者的频道
+- `PUBSUB NUMSUB [channel ...]` → 返回每个频道的订阅者数量
+- `PUBSUB NUMPAT` → 返回模式订阅数量
+
+说明：
+
+- 订阅关系属于连接级别，不写入 AOF，连接断开后自动清理
+- `PUBLISH` 不修改 key，也不写入 AOF
+- 同一个连接同时命中频道订阅和模式订阅时会收到两条消息：`message` 和 `pmessage`
+- 重复订阅同一频道只会保留一份订阅关系
+- 面板控制台不允许直接 `SUBSCRIBE`，请使用「订阅」标签页；`PUBLISH` 和 `PUBSUB` 可以在控制台执行
+
 注意：
 - 列表、集合、哈希和有序集合的多个元素使用换行分隔，字符串内容本身不建议包含换行。
 - 集合类 key 在删除最后一个元素后会自动删除，和 Redis 的行为一致。
@@ -417,6 +463,9 @@ curl -s -X DELETE \
 - 命令执行层：
   - 在 `LightRedisApplication` 中使用单线程执行器 `light-redis-command-executor`
   - 所有命令在这个线程中串行执行
+- 发布订阅：
+  - `PUBLISH`、`SUBSCRIBE` 等命令同样在命令线程执行
+  - 推送消息通过 remoting-core 的 `PUSH` 帧写回订阅连接，Netty 异步发送
 
 这与 Redis 6 的整体思路类似：
 
@@ -436,5 +485,6 @@ curl -s -X DELETE \
 - 持久化：
   - 旧 generation 自动清理
   - 简化版 RDB 快照
-- 发布订阅：
-  - `PUBLISH` / `SUBSCRIBE` 等
+- 发布订阅增强：
+  - 键空间通知
+  - 慢消费者输出缓冲限制

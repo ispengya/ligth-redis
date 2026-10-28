@@ -1,5 +1,6 @@
 package com.ispengya.lightredis.cli;
 
+import com.ispengya.lightredis.client.PubSubMessage;
 import com.ispengya.lightredis.client.RemotingLightRedisClient;
 import picocli.CommandLine;
 
@@ -34,10 +35,22 @@ public class LightRedisCli implements Runnable {
         PrintWriter out = new PrintWriter(new OutputStreamWriter(System.out, StandardCharsets.UTF_8), true);
         try {
             client.start();
+            client.setPubSubListener(message -> {
+                out.println();
+                if (message.getType() == PubSubMessage.Type.PMESSAGE) {
+                    out.println("[pattern:" + message.getPattern() + "] "
+                            + message.getChannel() + "> " + message.getPayload());
+                } else {
+                    out.println("[" + message.getChannel() + "] " + message.getPayload());
+                }
+                out.print(host + ":" + port + "> ");
+                out.flush();
+            });
             Runtime.getRuntime().addShutdownHook(new Thread(client::close));
             BufferedReader reader = new BufferedReader(
                     new InputStreamReader(System.in, StandardCharsets.UTF_8));
             out.println("Connected to " + address + ", type \"quit\" or \"exit\" to close.");
+            out.println("Use SUBSCRIBE <channel> or PSUBSCRIBE <pattern> to receive messages.");
             while (true) {
                 out.print(host + ":" + port + "> ");
                 out.flush();

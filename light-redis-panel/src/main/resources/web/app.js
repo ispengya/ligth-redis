@@ -27,7 +27,8 @@
         redisAddress: '127.0.0.1:6379',
         currentKeys: [],
         expandedPaths: new Set(),
-        collapsedPaths: new Set()
+        collapsedPaths: new Set(),
+        subscribeSource: null
     };
 
     const elements = {
@@ -53,8 +54,14 @@
         clearConsole: document.getElementById('clear-console'),
         consoleTab: document.getElementById('tab-console'),
         detailTab: document.getElementById('tab-detail'),
+        subscribeTab: document.getElementById('tab-subscribe'),
         consoleView: document.getElementById('console-view'),
         detailView: document.getElementById('detail-view'),
+        subscribeView: document.getElementById('subscribe-view'),
+        subscribeChannel: document.getElementById('subscribe-channel'),
+        subscribeToggle: document.getElementById('subscribe-toggle'),
+        subscribeStatus: document.getElementById('subscribe-status'),
+        subscribeOutput: document.getElementById('subscribe-output'),
         detailEmpty: document.getElementById('detail-empty'),
         refreshInterval: document.getElementById('refresh-interval'),
         statusUpdated: document.getElementById('status-updated'),
@@ -106,6 +113,14 @@
         }
         elements.consoleTab.addEventListener('click', () => setMainTab('console'));
         elements.detailTab.addEventListener('click', () => setMainTab('detail'));
+        elements.subscribeTab.addEventListener('click', () => setMainTab('subscribe'));
+        elements.subscribeToggle.addEventListener('click', toggleSubscription);
+        elements.subscribeChannel.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                toggleSubscription();
+            }
+        });
         elements.commandForm.addEventListener('submit', onSubmit);
         elements.clearConsole.addEventListener('click', clearConsole);
         elements.refreshKeys.addEventListener('click', refreshKeys);
@@ -129,12 +144,17 @@
 
     function setMainTab(tab) {
         const showConsole = tab === 'console';
+        const showDetail = tab === 'detail';
+        const showSubscribe = tab === 'subscribe';
         elements.consoleTab.classList.toggle('active', showConsole);
-        elements.detailTab.classList.toggle('active', !showConsole);
+        elements.detailTab.classList.toggle('active', showDetail);
+        elements.subscribeTab.classList.toggle('active', showSubscribe);
         elements.consoleTab.setAttribute('aria-selected', String(showConsole));
-        elements.detailTab.setAttribute('aria-selected', String(!showConsole));
+        elements.detailTab.setAttribute('aria-selected', String(showDetail));
+        elements.subscribeTab.setAttribute('aria-selected', String(showSubscribe));
         elements.consoleView.classList.toggle('hidden', !showConsole);
-        elements.detailView.classList.toggle('hidden', showConsole);
+        elements.detailView.classList.toggle('hidden', !showDetail);
+        elements.subscribeView.classList.toggle('hidden', !showSubscribe);
         elements.clearConsole.classList.toggle('hidden', !showConsole);
         if (showConsole) {
             try {
@@ -142,6 +162,8 @@
             } catch (error) {
                 elements.commandInput.focus();
             }
+        } else if (showSubscribe) {
+            elements.subscribeChannel.focus();
         }
     }
 
@@ -600,6 +622,87 @@
             return Math.round(value / 1000) + ' 秒';
         }
         return Math.round(value) + ' 毫秒';
+    }
+
+    function toggleSubscription() {
+        if (state.subscribeSource) {
+            stopSubscription('已断开');
+        } else {
+            startSubscription();
+        }
+    }
+
+    function startSubscription() {
+        const channel = elements.subscribeChannel.value.trim();
+        if (!channel) {
+            elements.subscribeStatus.textContent = '请输入频道';
+            elements.subscribeChannel.focus();
+            return;
+        }
+
+        stopSubscription(null);
+        elements.subscribeOutput.textContent = '';
+        elements.subscribeStatus.textContent = '连接中…';
+        elements.subscribeToggle.textContent = '断开';
+
+        const source = new EventSource(
+            '/api/subscribe?channel=' + encodeURIComponent(channel));
+        state.subscribeSource = source;
+        source.onmessage = event => {
+            let data;
+            try {
+                data = JSON.parse(event.data);
+            } catch (error) {
+                return;
+            }
+            if (data.type === 'subscribed') {
+                elements.subscribeStatus.textContent = data.pattern
+                    ? '已订阅模式 ' + data.pattern
+                    : '已订阅 ' + data.channel;
+                return;
+            }
+            appendSubscription(data);
+        };
+        source.onerror = () => {
+            if (state.subscribeSource === source) {
+                elements.subscribeStatus.textContent = '连接中断，正在重连…';
+            }
+        };
+    }
+
+    function stopSubscription(status) {
+        if (state.subscribeSource) {
+            state.subscribeSource.close();
+            state.subscribeSource = null;
+        }
+        elements.subscribeToggle.textContent = '订阅';
+        if (status !== null) {
+            elements.subscribeStatus.textContent = status;
+        }
+    }
+
+    function appendSubscription(data) {
+        const line = document.createElement('div');
+        line.className = 'subscribe-line';
+
+        const meta = document.createElement('span');
+        meta.className = 'subscribe-meta mono';
+        const channel = data.channel || '';
+        meta.textContent = data.type === 'pmessage'
+            ? '[pattern:' + (data.pattern || '') + '] ' + channel
+            : '[' + channel + ']';
+
+        const payload = document.createElement('span');
+        payload.className = 'subscribe-payload mono';
+        payload.textContent = data.payload == null ? '' : String(data.payload);
+
+        line.appendChild(meta);
+        line.appendChild(payload);
+        elements.subscribeOutput.appendChild(line);
+        while (elements.subscribeOutput.childElementCount > 200) {
+            elements.subscribeOutput.removeChild(elements.subscribeOutput.firstElementChild);
+        }
+        elements.subscribeOutput.scrollTop = elements.subscribeOutput.scrollHeight;
     }
 
     function setConnection(connected, text) {

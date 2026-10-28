@@ -9,6 +9,7 @@ import com.ispengya.lightredis.persistence.CommandLog;
 import com.ispengya.lightredis.persistence.FileCommandLog;
 import com.ispengya.lightredis.persistence.NoopCommandLog;
 import com.ispengya.lightredis.persistence.PersistenceConfig;
+import com.ispengya.lightredis.pubsub.PubSubService;
 import com.ispengya.lightredis.store.ActiveExpireCycle;
 import com.ispengya.lightredis.store.InMemoryKeyValueStore;
 import com.ispengya.lightredis.store.KeyValueStore;
@@ -85,7 +86,11 @@ public class LightRedisApplication {
         executor.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
         executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
         RemotingServer server = new NettyRemotingServer(DEFAULT_PORT);
-        NettyRequestProcessor processor = new LightRedisRequestProcessor(commandService, stats);
+        PubSubService pubSubService = new PubSubService((channel, message) -> {
+            server.push(channel, message);
+        });
+        NettyRequestProcessor processor = new LightRedisRequestProcessor(
+                commandService, stats, pubSubService);
         server.registerProcessor(REQUEST_CODE, processor, executor);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {

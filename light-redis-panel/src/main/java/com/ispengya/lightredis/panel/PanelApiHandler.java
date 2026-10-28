@@ -1,6 +1,7 @@
 package com.ispengya.lightredis.panel;
 
 import com.ispengya.lightredis.client.LightRedisClient;
+import com.ispengya.lightredis.client.PubSubMessage;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import org.slf4j.Logger;
@@ -19,6 +20,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /**
  * 面板 API 处理器。
@@ -30,10 +35,17 @@ public class PanelApiHandler implements HttpHandler {
     private static final Logger log = LoggerFactory.getLogger(PanelApiHandler.class);
     private static final int MAX_COMMAND_BYTES = 32 * 1024;
     private static final int MAX_NAME_LENGTH = 1024;
+    private static final int MAX_SUBSCRIBE_QUEUE = 1000;
+    private static final long SSE_KEEPALIVE_MILLIS = 15000L;
 
     private final LightRedisClient client;
     private final String redisAddress;
     private final int httpPort;
+
+    /**
+     * 订阅专用客户端工厂。
+     */
+    private final Supplier<LightRedisClient> clientFactory;
 
     /**
      * 创建 API 处理器。
@@ -41,17 +53,23 @@ public class PanelApiHandler implements HttpHandler {
      * @param client Redis 客户端
      * @param redisAddress Redis 地址，仅用于展示
      * @param httpPort 面板 HTTP 端口
+     * @param clientFactory 订阅专用客户端工厂
      */
-    public PanelApiHandler(LightRedisClient client, String redisAddress, int httpPort) {
+    public PanelApiHandler(LightRedisClient client, String redisAddress, int httpPort,
+                           Supplier<LightRedisClient> clientFactory) {
         if (client == null) {
             throw new IllegalArgumentException("Client must not be null");
         }
         if (redisAddress == null || redisAddress.trim().isEmpty()) {
             throw new IllegalArgumentException("Redis address must not be empty");
         }
+        if (clientFactory == null) {
+            throw new IllegalArgumentException("Client factory must not be null");
+        }
         this.client = client;
         this.redisAddress = redisAddress;
         this.httpPort = httpPort;
+        this.clientFactory = clientFactory;
     }
 
     @Override
@@ -106,6 +124,12 @@ public class PanelApiHandler implements HttpHandler {
                     } else {
                         notAllowed(exchange, "GET, DELETE");
                     }
+                    break;
+                case "/api/subscribe":
+                    if (!requireMethod(exchange, method, "GET")) {
+                        return;
+                    }
+                    handleSubscribe(exchange);
                     break;
                 default:
                     writeError(exchange, 404, "not found");
@@ -175,6 +199,12 @@ public class PanelApiHandler implements HttpHandler {
         String command = new String(body, StandardCharsets.UTF_8).trim();
         if (command.isEmpty()) {
             writeError(exchange, 400, "command must not be empty");
+            return;
+        }
+        String verb = command.split("\\s+", 2)[0].toUpperCase(Locale.ROOT);
+        if ("SUBSCRIBE".equals(verb) || "PSUBSCRIBE".equals(verb)
+                || "UNSUBSCRIBE".equals(verb) || "PUNSUBSCRIBE".equals(verb)) {
+            writeError(exchange, 400, "use the subscription tab for this command");
             return;
         }
 
@@ -329,6 +359,122 @@ public class PanelApiHandler implements HttpHandler {
         } catch (Exception e) {
             writeUnavailable(exchange, e);
         }
+    }
+
+    /**
+     * 处理 SSE 订阅。
+     *
+     * <p>每个浏览器订阅使用独立客户端连接，订阅关系不会影响普通 API 请求。</p>
+     *
+     * @param exchange HTTP 请求
+     * @throws IOException 写出失败
+     */
+    private void handleSubscribe(HttpExchange exchange) throws IOException {
+        String origin = exchange.getRequestHeaders().getFirst("Origin");
+        if (origin != null && !isAllowedOrigin(origin)) {
+            writeError(exchange, 403, "forbidden origin");
+            return;
+        }
+
+        Map<String, String> query = parseQuery(exchange.getRequestURI().getRawQuery());
+        String pattern = query.get("pattern");
+        boolean patternMode = pattern != null && !pattern.trim().isEmpty();
+        String target = patternMode ? pattern.trim() : query.get("channel");
+        if (target == null || target.isEmpty()) {
+            writeError(exchange, 400, "missing channel or pattern");
+            return;
+        }
+        if (target.length() > MAX_NAME_LENGTH) {
+            writeError(exchange, 400, "channel or pattern too long");
+            return;
+        }
+
+        LightRedisClient subscriptionClient = clientFactory.get();
+        if (subscriptionClient == null) {
+            writeError(exchange, 503, "subscription client unavailable");
+            return;
+        }
+        BlockingQueue<PubSubMessage> messages = new LinkedBlockingQueue<>(MAX_SUBSCRIBE_QUEUE);
+        boolean streaming = false;
+        try {
+            subscriptionClient.setPubSubListener(message -> {
+                if (!messages.offer(message)) {
+                    log.debug("panel subscribe queue full, dropping message on {}",
+                            message.getChannel());
+                }
+            });
+            subscriptionClient.start();
+
+            String command = (patternMode ? "PSUBSCRIBE " : "SUBSCRIBE ")
+                    + quoteArgument(target);
+            String reply = subscriptionClient.execute(command);
+            if (isErrorReply(reply)) {
+                writeError(exchange, 400, reply);
+                return;
+            }
+
+            exchange.getResponseHeaders().set("Content-Type", "text/event-stream; charset=utf-8");
+            exchange.getResponseHeaders().set("Cache-Control", "no-store");
+            exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+            exchange.getResponseHeaders().set("Referrer-Policy", "no-referrer");
+            exchange.sendResponseHeaders(200, 0);
+            streaming = true;
+
+            try (OutputStream output = exchange.getResponseBody()) {
+                Map<String, Object> subscribed = new LinkedHashMap<>();
+                subscribed.put("type", "subscribed");
+                if (patternMode) {
+                    subscribed.put("pattern", target);
+                } else {
+                    subscribed.put("channel", target);
+                }
+                subscribed.put("reply", reply);
+                writeSse(output, subscribed);
+
+                while (true) {
+                    PubSubMessage message;
+                    try {
+                        message = messages.poll(SSE_KEEPALIVE_MILLIS, TimeUnit.MILLISECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    if (message == null) {
+                        output.write(": keepalive\n\n".getBytes(StandardCharsets.UTF_8));
+                        output.flush();
+                        continue;
+                    }
+                    Map<String, Object> data = new LinkedHashMap<>();
+                    data.put("type", message.getType() == PubSubMessage.Type.PMESSAGE
+                            ? "pmessage" : "message");
+                    data.put("channel", message.getChannel());
+                    data.put("pattern", message.getPattern());
+                    data.put("payload", message.getPayload());
+                    writeSse(output, data);
+                }
+            }
+        } catch (Exception e) {
+            if (streaming) {
+                log.debug("panel subscription stream ended", e);
+            } else {
+                writeUnavailable(exchange, e);
+            }
+        } finally {
+            subscriptionClient.close();
+        }
+    }
+
+    /**
+     * 写出一条 SSE 数据。
+     *
+     * @param output 响应流
+     * @param data 数据
+     * @throws IOException 写出失败
+     */
+    private void writeSse(OutputStream output, Map<String, Object> data) throws IOException {
+        output.write(("data: " + PanelJson.write(data) + "\n\n")
+                .getBytes(StandardCharsets.UTF_8));
+        output.flush();
     }
 
     /**

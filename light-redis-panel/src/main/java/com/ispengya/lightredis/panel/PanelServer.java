@@ -11,6 +11,7 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 /**
  * 面板 HTTP 服务。
@@ -53,9 +54,11 @@ public class PanelServer {
      * @param client Redis 客户端
      * @param redisAddress Redis 地址，仅用于展示
      * @param httpPort 面板 HTTP 端口
+     * @param clientFactory 订阅专用客户端工厂
      * @throws IOException 端口绑定失败
      */
-    public PanelServer(LightRedisClient client, String redisAddress, int httpPort) throws IOException {
+    public PanelServer(LightRedisClient client, String redisAddress, int httpPort,
+                       Supplier<LightRedisClient> clientFactory) throws IOException {
         if (client == null) {
             throw new IllegalArgumentException("Client must not be null");
         }
@@ -65,17 +68,21 @@ public class PanelServer {
         if (httpPort <= 0 || httpPort > 65535) {
             throw new IllegalArgumentException("HTTP port must be between 1 and 65535");
         }
+        if (clientFactory == null) {
+            throw new IllegalArgumentException("Client factory must not be null");
+        }
         this.httpPort = httpPort;
         this.redisAddress = redisAddress;
         this.httpServer = HttpServer.create(
                 new InetSocketAddress(InetAddress.getByName("127.0.0.1"), httpPort), 0);
-        this.executor = Executors.newFixedThreadPool(8, runnable -> {
+        this.executor = Executors.newFixedThreadPool(16, runnable -> {
             Thread thread = new Thread(runnable,
                     "light-redis-panel-http-" + THREAD_INDEX.incrementAndGet());
             thread.setDaemon(true);
             return thread;
         });
-        this.httpServer.createContext("/api/", new PanelApiHandler(client, redisAddress, httpPort));
+        this.httpServer.createContext("/api/",
+                new PanelApiHandler(client, redisAddress, httpPort, clientFactory));
         this.httpServer.createContext("/", new StaticFileHandler());
         this.httpServer.setExecutor(executor);
     }

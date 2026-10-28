@@ -5,6 +5,7 @@ import com.ispengya.remoting.netty.NettyRemotingClient;
 import com.ispengya.remoting.protocol.RemotingCommand;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -13,6 +14,31 @@ import java.util.concurrent.CompletableFuture;
 public class RemotingLightRedisClient implements LightRedisClient {
 
     private static final int REQUEST_CODE = 1;
+
+    /**
+     * 发布订阅推送消息码，与 light-redis-core 的 PubSubProtocol 保持一致。
+     */
+    private static final int PUBSUB_PUSH_CODE = 2;
+
+    /**
+     * 推送类型字段。
+     */
+    private static final String FIELD_TYPE = "type";
+
+    /**
+     * 推送频道字段。
+     */
+    private static final String FIELD_CHANNEL = "channel";
+
+    /**
+     * 推送模式字段。
+     */
+    private static final String FIELD_PATTERN = "pattern";
+
+    /**
+     * 模式匹配消息类型。
+     */
+    private static final String TYPE_PMESSAGE = "pmessage";
 
     /**
      * 目标服务端地址，格式为 host:port。
@@ -38,6 +64,11 @@ public class RemotingLightRedisClient implements LightRedisClient {
      * 客户端是否已经关闭。
      */
     private boolean closed;
+
+    /**
+     * 发布订阅消息监听器。
+     */
+    private volatile PubSubListener pubSubListener;
 
     /**
      * 创建客户端。
@@ -68,6 +99,7 @@ public class RemotingLightRedisClient implements LightRedisClient {
         }
         if (!started) {
             client.start();
+            client.registerPushListener(PUBSUB_PUSH_CODE, this::handlePush);
             started = true;
         }
     }
@@ -106,12 +138,40 @@ public class RemotingLightRedisClient implements LightRedisClient {
     }
 
     @Override
+    public void setPubSubListener(PubSubListener listener) {
+        this.pubSubListener = listener;
+    }
+
+    @Override
     public synchronized void close() {
         if (!closed) {
             closed = true;
+            client.unregisterPushListener(PUBSUB_PUSH_CODE);
             client.shutdown();
             started = false;
         }
+    }
+
+    /**
+     * 处理服务端推送的订阅消息。
+     *
+     * @param message 推送消息
+     */
+    private void handlePush(RemotingCommand message) {
+        PubSubListener listener = this.pubSubListener;
+        if (listener == null) {
+            return;
+        }
+        Map<String, String> fields = message.getExtFields();
+        String type = fields == null ? null : fields.get(FIELD_TYPE);
+        String channel = fields == null ? null : fields.get(FIELD_CHANNEL);
+        String pattern = fields == null ? null : fields.get(FIELD_PATTERN);
+        byte[] body = message.getBody();
+        String payload = body == null ? "" : new String(body, StandardCharsets.UTF_8);
+        PubSubMessage.Type messageType = TYPE_PMESSAGE.equals(type)
+                ? PubSubMessage.Type.PMESSAGE
+                : PubSubMessage.Type.MESSAGE;
+        listener.onMessage(new PubSubMessage(messageType, channel, pattern, payload));
     }
 
     private RemotingCommand createRequest(String command) {
