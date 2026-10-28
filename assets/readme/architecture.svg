@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="680" viewBox="0 0 1200 680"
+     role="img" aria-labelledby="title desc">
+  <title id="title">light-redis 架构图</title>
+  <desc id="desc">CLI、Web 面板和客户端通过 Netty 连接服务端；命令在单线程中执行，写入内存 Store 与 AOF；发布订阅通过 PUSH 帧推回连接。</desc>
+
+  <defs>
+    <marker id="arrow-accent" markerWidth="9" markerHeight="9" refX="7" refY="3"
+            orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L8,3 z" fill="#b8893a"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="9" markerHeight="9" refX="7" refY="3"
+            orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L8,3 z" fill="#0a8f4d"/>
+    </marker>
+    <marker id="arrow-push" markerWidth="9" markerHeight="9" refX="7" refY="3"
+            orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L8,3 z" fill="#b8893a"/>
+    </marker>
+    <marker id="arrow-muted" markerWidth="9" markerHeight="9" refX="7" refY="3"
+            orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L8,3 z" fill="#73706a"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="680" rx="28" fill="#fbfaf6"/>
+  <rect x="1" y="1" width="1198" height="678" rx="27" fill="none" stroke="#e7e2d7"/>
+
+  <!-- Header -->
+  <text x="76" y="58" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" letter-spacing="2" fill="#73706a">LIGHT-REDIS / SYSTEM MAP</text>
+  <rect x="56" y="82" width="8" height="8" rx="1.5" fill="#b8893a"/>
+  <text x="76" y="102" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="40" font-weight="700" fill="#1c1a16">一条命令的完整路径</text>
+  <text x="76" y="136" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="20" fill="#73706a">从客户端输入，到单线程执行、内存存储和 AOF 落盘</text>
+  <text x="1144" y="58" text-anchor="end"
+        font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#73706a">Java 8 · Netty</text>
+  <text x="1144" y="84" text-anchor="end"
+        font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#73706a">51 commands · 39 tests</text>
+
+  <!-- Clients -->
+  <text x="56" y="174" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#73706a">CLIENTS</text>
+
+  <rect x="56" y="190" width="220" height="72" rx="14" fill="#ffffff" stroke="#e7e2d7"/>
+  <text x="80" y="221" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="24" font-weight="600" fill="#1c1a16">CLI</text>
+  <text x="80" y="246" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#73706a">SUBSCRIBE / PUBLISH</text>
+
+  <rect x="56" y="276" width="220" height="72" rx="14" fill="#ffffff" stroke="#e7e2d7"/>
+  <text x="80" y="307" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="24" font-weight="600" fill="#1c1a16">Web Panel</text>
+  <text x="80" y="332" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#73706a">HTTP + SSE</text>
+
+  <rect x="56" y="362" width="220" height="72" rx="14" fill="#ffffff" stroke="#e7e2d7"/>
+  <text x="80" y="393" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="24" font-weight="600" fill="#1c1a16">Client SDK</text>
+  <text x="80" y="418" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#73706a">LightRedisClient</text>
+
+  <!-- Request path into server -->
+  <path d="M 276 310 H 326 V 262 H 370" fill="none" stroke="#b8893a"
+        stroke-width="2" marker-end="url(#arrow-accent)"/>
+
+  <!-- Server -->
+  <rect x="340" y="174" width="570" height="470" rx="20" fill="#ffffff" stroke="#e7e2d7"/>
+  <text x="370" y="208" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="22" font-weight="700" fill="#1c1a16">light-redis-core</text>
+  <text x="882" y="208" text-anchor="end"
+        font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="17" fill="#9a958b">single JVM</text>
+
+  <rect x="370" y="228" width="510" height="64" rx="12" fill="#f7f4ec" stroke="#e7e2d7"/>
+  <text x="392" y="258" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="22" font-weight="600" fill="#1c1a16">NettyRemotingServer</text>
+  <text x="392" y="280" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#73706a">remoting-core 0.2.0 · REQUEST / RESPONSE / PUSH</text>
+
+  <path d="M 625 292 V 318" fill="none" stroke="#b8893a" stroke-width="2"
+        marker-end="url(#arrow-accent)"/>
+
+  <rect x="370" y="318" width="510" height="64" rx="12" fill="#ffffff" stroke="#e7e2d7"/>
+  <text x="392" y="348" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="22" font-weight="600" fill="#1c1a16">单线程命令执行器</text>
+  <text x="392" y="370" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#73706a">LightRedisRequestProcessor</text>
+
+  <path d="M 492 382 V 408" fill="none" stroke="#b8893a" stroke-width="2"
+        marker-end="url(#arrow-accent)"/>
+  <path d="M 757 382 V 408" fill="none" stroke="#b8893a" stroke-width="2"
+        marker-end="url(#arrow-accent)"/>
+
+  <rect x="370" y="408" width="245" height="120" rx="12" fill="#ffffff" stroke="#d8d1c2"/>
+  <text x="390" y="438" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="22" font-weight="600" fill="#1c1a16">CommandService</text>
+  <text x="390" y="462" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#73706a">EXPIRE → PEXPIREAT</text>
+  <text x="390" y="484" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="18" fill="#4b463d">先写 AOF，再执行</text>
+  <text x="390" y="506" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="18" fill="#4b463d">51 个命令</text>
+
+  <rect x="635" y="408" width="245" height="120" rx="12" fill="#ffffff" stroke="#d8d1c2"/>
+  <text x="655" y="438" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="22" font-weight="600" fill="#1c1a16">PubSubService</text>
+  <text x="655" y="462" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#73706a">channel / pattern</text>
+  <text x="655" y="484" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="18" fill="#4b463d">PUBLISH → PUSH</text>
+  <text x="655" y="506" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="18" fill="#4b463d">断线自动清理</text>
+
+  <path d="M 492 528 V 556" fill="none" stroke="#b8893a" stroke-width="2"
+        marker-end="url(#arrow-accent)"/>
+
+  <rect x="370" y="556" width="510" height="64" rx="12" fill="#f7f4ec" stroke="#e7e2d7"/>
+  <text x="392" y="586" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="22" font-weight="600" fill="#1c1a16">KeyValueStore</text>
+  <text x="392" y="608" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#73706a">String · List · Hash · Set · ZSet · expires</text>
+
+  <!-- Push path back to clients -->
+  <path d="M 880 468 H 920 V 152 H 166 V 184" fill="none" stroke="#b8893a"
+        stroke-width="2" stroke-dasharray="7 6" marker-end="url(#arrow-push)"/>
+  <text x="932" y="310" transform="rotate(-90 932 310)" text-anchor="middle"
+        font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#8f6a29">PUSH</text>
+
+  <!-- Persistence -->
+  <rect x="950" y="174" width="200" height="470" rx="20" fill="#ffffff" stroke="#e7e2d7"/>
+  <rect x="952" y="196" width="4" height="426" rx="2" fill="#0a8f4d" opacity="0.35"/>
+  <text x="974" y="208" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" letter-spacing="1" fill="#73706a">PERSISTENCE</text>
+  <text x="974" y="244" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" font-weight="600" fill="#1c1a16">FileCommandLog</text>
+  <text x="974" y="274" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#4b463d">AofLayout</text>
+  <text x="974" y="302" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#73706a">CURRENT</text>
+  <text x="974" y="326" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#73706a">generations/</text>
+  <line x1="974" y1="348" x2="1126" y2="348" stroke="#e7e2d7" stroke-width="1"/>
+  <text x="974" y="380" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#4b463d">file-storage</text>
+  <text x="974" y="404" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#73706a">CommitLog</text>
+  <text x="974" y="428" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#73706a">CRC 校验</text>
+  <line x1="974" y1="450" x2="1126" y2="450" stroke="#e7e2d7" stroke-width="1"/>
+  <text x="974" y="482" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#4b463d">AofSnapshot</text>
+  <text x="974" y="506" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="18" fill="#4b463d">Writer</text>
+  <text x="974" y="538" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="18" fill="#73706a">重写期间 delta 补齐</text>
+  <text x="974" y="570" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="18" fill="#73706a">generation 原子切换</text>
+  <text x="974" y="608" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="18" fill="#73706a">启动回放恢复内存</text>
+
+  <!-- Store to persistence -->
+  <path d="M 880 580 H 950" fill="none" stroke="#0a8f4d" stroke-width="2"
+        marker-end="url(#arrow-green)"/>
+  <text x="915" y="568" text-anchor="middle"
+        font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="18" fill="#0a8f4d">落盘</text>
+  <path d="M 950 612 H 880" fill="none" stroke="#0a8f4d" stroke-width="2"
+        stroke-dasharray="6 5" marker-end="url(#arrow-green)"/>
+  <text x="915" y="630" text-anchor="middle"
+        font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="18" fill="#0a8f4d">回放</text>
+
+  <!-- Footer legend -->
+  <line x1="56" y1="658" x2="82" y2="658" stroke="#b8893a" stroke-width="2"/>
+  <text x="90" y="664" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="18" fill="#73706a">请求 / 推送</text>
+  <line x1="220" y1="658" x2="246" y2="658" stroke="#0a8f4d" stroke-width="2"/>
+  <text x="254" y="664" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="18" fill="#73706a">AOF</text>
+  <line x1="310" y1="658" x2="336" y2="658" stroke="#9a958b" stroke-width="2"/>
+  <text x="344" y="664" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
+        font-size="18" fill="#73706a">模块 / 线程</text>
+  <text x="1144" y="664" text-anchor="end"
+        font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
+        font-size="17" fill="#9a958b">light-redis / architecture</text>
+</svg>
