@@ -10,12 +10,12 @@
   <img alt="Maven" src="https://img.shields.io/badge/Maven-3+-73706a?style=flat-square">
   <img alt="Netty" src="https://img.shields.io/badge/Netty-4.1-0a8f4d?style=flat-square">
   <img alt="Commands" src="https://img.shields.io/badge/commands-51-1c1a16?style=flat-square">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-39-0a8f4d?style=flat-square">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-70-0a8f4d?style=flat-square">
 </p>
 
 light-redis 不是 Redis 的完整替代品，而是一个把 Redis 核心机制拆开、跑通并可视化的单机学习项目。
 
-它包含一个 Netty 服务端、一个客户端核心、一个交互式 CLI，以及一个本地 Web 控制台。你可以用它练习五种数据结构、key 过期、AOF 持久化与后台重写、发布订阅，也可以直接在面板里浏览 key、执行命令、查看 TTL 和接收订阅消息。
+它包含一个 Netty 服务端、一个客户端核心、一个面向 Java 应用的同步 SDK、一个交互式 CLI，以及一个本地 Web 控制台。你可以用它练习五种数据结构、key 过期、AOF 持久化与后台重写、发布订阅，也可以直接在面板里浏览 key、执行命令、查看 TTL 和接收订阅消息。
 
 > 当前边界：自定义文本协议（非 RESP）、单机、无事务 / RDB / 主从复制 / 集群 / 内存淘汰。适合学习和二次开发，不建议直接用于生产。
 
@@ -73,6 +73,7 @@ REDIS_HOST=127.0.0.1 REDIS_PORT=6379 ./panel.sh
 | 过期 | 惰性删除 + 每 100ms 抽样删除；`TTL` / `PTTL` / `PERSIST`；TTL 随 AOF 持久化 |
 | 持久化 | 写命令先落 AOF 再执行；启动回放；后台重写；`CURRENT` + generation 原子切换 |
 | 发布订阅 | 频道 / glob 模式订阅；`PUBLISH`；`PUBSUB` 查询；服务端 `PUSH` 推送 |
+| Java SDK | 51 个命令的类型化同步方法、统一异常、订阅句柄、原始命令出口 |
 | Web 控制台 | 命令控制台、按 `:` 分层的 key 树、键详情、TTL 展示、订阅消息、服务状态 |
 | 通信 / 线程 | Netty IO 多线程 + 单线程命令执行；自定义文本协议，支持引号与转义 |
 
@@ -80,7 +81,7 @@ REDIS_HOST=127.0.0.1 REDIS_PORT=6379 ./panel.sh
 
 <p align="center">
   <img src="./assets/readme/architecture.svg" width="100%"
-       alt="light-redis 架构：CLI、Web 面板和客户端通过 Netty 连接服务端；命令在单线程中执行，写入内存 Store 与 AOF；发布订阅通过 PUSH 帧推回连接">
+       alt="light-redis 架构：CLI、Web 面板和 Java SDK 通过 Netty 连接服务端；命令在单线程中执行，写入内存 Store 与 AOF；发布订阅通过 PUSH 帧推回连接">
 </p>
 
 一次写命令的完整路径：
@@ -97,16 +98,18 @@ REDIS_HOST=127.0.0.1 REDIS_PORT=6379 ./panel.sh
 ```text
 light-redis-core     -> remoting-core 0.2.0 + file-storage 0.1.0
 light-redis-client   -> remoting-core 0.2.0
+light-redis-sdk      -> light-redis-client
 light-redis-cli      -> light-redis-client + picocli
 light-redis-panel    -> light-redis-client + picocli + JDK HttpServer
 ```
 
-`light-redis-core` 不依赖客户端或展示模块。CLI、面板和后续 SDK 都复用 `light-redis-client`。
+`light-redis-core` 不依赖客户端或展示模块。CLI、面板和 Java SDK 都复用 `light-redis-client`。
 
 ```text
 light-redis/
 ├── light-redis-core/       # 协议、命令、存储、TTL、AOF、发布订阅、启动入口
 ├── light-redis-client/     # 同步/异步命令调用、连接管理、订阅消息监听
+├── light-redis-sdk/        # 面向 Java 应用的类型化同步 SDK
 ├── light-redis-cli/        # picocli 交互式客户端
 ├── light-redis-panel/      # HTTP API、SSE 订阅、静态页面
 ├── assets/readme/          # README 架构图
@@ -228,6 +231,70 @@ demo:channel 1
 - 重复订阅同一频道只保留一份关系。
 - CLI 不进入严格订阅模式，订阅后仍然可以继续发送普通命令。
 - 面板控制台不允许直接 `SUBSCRIBE` / `PSUBSCRIBE`，请使用「订阅」标签页；`PUBLISH` 和 `PUBSUB` 可以在控制台执行。
+
+### Java SDK
+
+`light-redis-sdk` 是给业务 Java 程序使用的同步 SDK，独立成模块，依赖 `light-redis-client`：
+
+```xml
+<dependency>
+  <groupId>com.ispengya.lightredis</groupId>
+  <artifactId>light-redis-sdk</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+</dependency>
+```
+
+先执行 `mvn install` 安装到本地仓库，或直接在同一个 Maven 工程里引用该模块。
+
+```java
+try (LightRedis redis = LightRedis.builder()
+        .host("127.0.0.1")
+        .port(6379)
+        .timeoutMillis(3000)
+        .connect()) {
+
+    redis.strings().set("sdk:name", "tom");
+    String name = redis.strings().get("sdk:name");
+
+    redis.hashes().hset("sdk:user", "name", "tom");
+    Map<String, String> user = redis.hashes().hgetall("sdk:user");
+
+    redis.pubsub().publish("demo:channel", "hello");
+}
+```
+
+订阅频道：
+
+```java
+try (Subscription subscription = redis.pubsub().subscribe("demo:channel", message ->
+        System.out.println(message.getChannel() + " -> " + message.getPayload()))) {
+    redis.pubsub().publish("demo:channel", "hello");
+}
+```
+
+也可以按 glob 模式订阅：
+
+```java
+redis.pubsub().psubscribe("demo:*", message ->
+        System.out.println(message.getPattern() + " / " + message.getChannel()));
+```
+
+类型化 API 覆盖全部 51 个命令，同时保留原始命令出口：
+
+```java
+String reply = redis.raw().execute("GET \"sdk:name\"");
+```
+
+行为约定：
+
+- 空值方法（`GET`、`LINDEX`、`HGET`、`ZSCORE`、`ZRANK` 等）返回 `null`，集合结果返回空集合。
+- 服务端 `ERR` / `WRONGTYPE` 抛出 `RedisCommandException`；连接失败和超时抛出 `LightRedisConnectionException`。
+- `connect()` 创建实例时会发送一次 `PING` 验证连接，服务端不可达时直接失败。
+- 一个 `LightRedis` 实例持有一个连接，实例线程安全；类型化 API 为同步调用。
+- 订阅回调在 SDK 的独立单线程上串行执行，可以在回调里继续执行普通命令或关闭订阅。
+- 同一客户端对同一频道或模式的多个订阅会做本地引用计数，最后一个句柄关闭时才发送 `UNSUBSCRIBE` / `PUNSUBSCRIBE`。
+- 断线重连后服务端订阅不会自动恢复，v1 需要调用方重新订阅。
+- 文本协议限制：key、频道、列表 / 集合 / 哈希 / ZSet 成员不能包含换行；字符串值和消息内容允许换行。字符串值正好等于 `(nil)` 时，`GET` 会与空值混淆。
 
 ### Web 控制台
 
@@ -351,13 +418,14 @@ data/light-redis/
 mvn clean test
 ```
 
-当前 **39 个测试**，覆盖：
+当前 **70 个测试**，覆盖：
 
 - AOF 编解码、启动恢复、失败命令跳过
 - AOF 后台重写、连续重写、重写期间写入
 - TTL 惰性删除、定期删除、重启恢复、重写保留
 - 发布订阅频道、模式、去重、取消订阅、连接清理
 - 服务端参数解析
+- SDK 参数编码、回复解析、全部命令组、订阅引用计数和回调关闭
 
 ## 后续可扩展
 
@@ -368,6 +436,7 @@ mvn clean test
 - 高可用：主从复制、Sentinel、Cluster
 - 运维：`CONFIG`、`CLIENT`、`SLOWLOG`、`MEMORY`、内存淘汰
 - 发布订阅：键空间通知、慢消费者限制
+- SDK：类型化异步 API、连接池、断线自动重订阅
 
 ## 说明
 

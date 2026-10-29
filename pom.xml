@@ -10,11 +10,12 @@
     <packaging>pom</packaging>
 
     <name>light-redis</name>
-    <description>轻量级 Redis 学习项目：服务端、客户端核心、CLI 与本地 Web 控制台</description>
+    <description>轻量级 Redis 学习项目：服务端、客户端核心、Java SDK、CLI 与本地 Web 控制台</description>
 
     <modules>
         <module>light-redis-core</module>
         <module>light-redis-client</module>
+        <module>light-redis-sdk</module>
         <module>light-redis-cli</module>
         <module>light-redis-panel</module>
     </modules>

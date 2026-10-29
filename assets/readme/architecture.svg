@@ -2,7 +2,7 @@
      width="1200" height="680" viewBox="0 0 1200 680"
      role="img" aria-labelledby="title desc">
   <title id="title">light-redis 架构图</title>
-  <desc id="desc">CLI、Web 面板和客户端通过 Netty 连接服务端；命令在单线程中执行，写入内存 Store 与 AOF；发布订阅通过 PUSH 帧推回连接。</desc>
+  <desc id="desc">CLI、Web 面板和 Java SDK 通过 Netty 连接服务端；命令在单线程中执行，写入内存 Store 与 AOF；发布订阅通过 PUSH 帧推回连接。</desc>
 
   <defs>
     <marker id="arrow-accent" markerWidth="9" markerHeight="9" refX="7" refY="3"
@@ -39,7 +39,7 @@
         font-size="18" fill="#73706a">Java 8 · Netty</text>
   <text x="1144" y="84" text-anchor="end"
         font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
-        font-size="18" fill="#73706a">51 commands · 39 tests</text>
+        font-size="18" fill="#73706a">51 commands · 70 tests</text>
 
   <!-- Clients -->
   <text x="56" y="174" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
@@ -59,9 +59,9 @@
 
   <rect x="56" y="362" width="220" height="72" rx="14" fill="#ffffff" stroke="#e7e2d7"/>
   <text x="80" y="393" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif"
-        font-size="24" font-weight="600" fill="#1c1a16">Client SDK</text>
+        font-size="24" font-weight="600" fill="#1c1a16">Java SDK</text>
   <text x="80" y="418" font-family="'Cascadia Code','SFMono-Regular',Consolas,monospace"
-        font-size="18" fill="#73706a">LightRedisClient</text>
+        font-size="18" fill="#73706a">LightRedis SDK</text>
 
   <!-- Request path into server -->
   <path d="M 276 310 H 326 V 262 H 370" fill="none" stroke="#b8893a"
